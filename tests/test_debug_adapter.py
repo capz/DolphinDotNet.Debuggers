@@ -443,9 +443,9 @@ class AdapterTests(unittest.TestCase):
                     elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address)), success=False)
                 self.assertIn('heartbeat', response['message'])
 
-    @unittest.skipUnless(sys.platform.startswith('linux') and shutil.which('cc'), 'Requires POSIX C host fixture')
+    @unittest.skipUnless(os.environ.get('DND_RUNTIME_ROOT') and sys.platform.startswith('linux') and shutil.which('cc'), 'Requires explicit DND_RUNTIME_ROOT and POSIX C host fixture')
     def test_real_native_guest_udp_detects_adapter_crash_and_new_session_recovery(self):
-        root = ADAPTER.parents[5]
+        root = Path(os.environ['DND_RUNTIME_ROOT'])
         binary = self.root / 'heartbeat-guest'
         subprocess.run(['cc', '-std=c11', '-Wall', '-Wextra', '-Werror', '-DDND_DEBUG_TELEMETRY', '-I'+str(root/'include'),
             str(root/'tests/debug_heartbeat_host.c'), str(root/'source/debug_heartbeat.c'), str(root/'source/performance.c'),
@@ -1075,8 +1075,9 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual("-1", values[0]["value"])
         self.client.request("variables", dict(variablesReference=ref, start=-1), success=False)
 
+    @unittest.skipUnless(os.environ.get('DND_RUNTIME_ROOT'), 'Compiler address generation is tested by the SDK compatibility job')
     def test_generated_variable_ranges_survive_interior_stops_and_location_changes(self):
-        spec = importlib.util.spec_from_file_location('addresses', Path(__file__).resolve().parents[1] / 'scripts/dnd_debug_addresses.py')
+        spec = importlib.util.spec_from_file_location('addresses', Path(os.environ['DND_RUNTIME_ROOT']) / 'scripts/dnd_debug_addresses.py')
         addresses = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(addresses)
         symbol = 'dnd_value_Program_Main_test'

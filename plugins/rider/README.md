@@ -24,7 +24,7 @@ must be Debug builds; Release target debugging is out of scope.
 
 See [configuration, target properties, protocol and acceptance](../../docs/rider-debugging.md).
 
-Build only this plugin in GitHub Actions using **Rider plugin → Run workflow**.
-Main CI reuses that workflow when selected. Full main-build releases include
-its installable ZIP, and standalone builds expose `DolphinDotNet-Rider-plugin`
-as an Actions artifact. See [CI packaging](../../docs/ci-selection.md).
+Build only this plugin in this repository's GitHub Actions using **Rider plugin →
+Run workflow**. The debugger CI workflow packages both integrations, and
+successful main builds attach the installable ZIP/VSIX to this repository's
+releases. See [development and releases](../../docs/development.md).

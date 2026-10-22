@@ -1,5 +1,7 @@
 # Visual Studio debugging
 
+Game/sample build commands below refer to the [SDK repository](https://github.com/capz/DolphinDotNet), which owns the samples. Plugin and adapter build commands run in this repository.
+
 The DolphinDotNet VSIX adds **Debug → Attach to DolphinDotNet…** to Visual Studio
 2022 17.8–17.x, x64. It uses Microsoft's built-in Debug Adapter Host and the same
 .NET DAP adapter as Rider. The packaged adapter includes its own Windows .NET

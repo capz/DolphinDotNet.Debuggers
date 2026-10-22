@@ -8,4 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="../DolphinDotNet.Debugger/DolphinDotNet.Debugger.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="../../scripts/dnd_dap_probe.py" Link="dnd_dap_probe.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
