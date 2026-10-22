@@ -1,5 +1,7 @@
 # Rider attach debugging (A6 / bounded A7 inspection)
 
+Game/sample build commands below refer to the [SDK repository](https://github.com/capz/DolphinDotNet), which owns the samples. Plugin and adapter build commands run in this repository.
+
 `plugins/rider` provides Run-menu attach, a saved target editor, and legacy attach
 configurations for multilaunch workflows. It uses public XDebugger APIs and Eclipse LSP4J DAP over stdio to the bundled
 .NET 8 adapter. It does not require LSP4IJ. The SDK is pinned to **Rider 2026.2.3.1
@@ -14,12 +16,12 @@ LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
 > support DolphinDotNet gutter breakpoints before attach.
 
 **Baseline:** PR #77 passed the complete Gradle package, host protocol/PTY and
-real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet/actions/runs/38944870062).
+real-Dolphin checks in [run 38944870062](https://github.com/capz/DolphinDotNet.Debuggers/actions/runs/38944870062).
 The stepping/lifecycle/primitive increment passed the complete CI in
-[run 39027086139](https://github.com/capz/DolphinDotNet/actions/runs/39027086139),
+[run 39027086139](https://github.com/capz/DolphinDotNet.Debuggers/actions/runs/39027086139),
 including Windows/macOS/Linux workflows, Rider packaging/Plugin Verifier and real
 Dolphin checks. The object/string increment also passed complete CI in
-[run 39033281419](https://github.com/capz/DolphinDotNet/actions/runs/39033281419),
+[run 39033281419](https://github.com/capz/DolphinDotNet.Debuggers/actions/runs/39033281419),
 including its new real-Dolphin inspection gate. The first overlay CI run
 (39045224094) exposed a delayed Dolphin pause notification during disconnect.
 The follow-up passes 50 adapter tests, the RSP suite and a local real-Dolphin
@@ -70,7 +72,7 @@ disabled `DndDebugSymbols`; `-p:DndDebugSymbols=true` overrides that setting.
 Methods discarded by the native linker remain explicitly unavailable in the
 address map, with no invented native extent or breakpoint addresses. Builds still
 fail if there are no generated native symbols or no verifiable source addresses.
-See [IDE build troubleshooting](ide-workflow.md) for Windows Docker lookup,
+See [IDE build troubleshooting](https://github.com/capz/DolphinDotNet/blob/main/docs/ide-workflow.md) for Windows Docker lookup,
 interrupted native cleanup and NuGet restore errors.
 
 1. For a sample in Dolphin, select **<sample> in Dolphin** and click **Run**.
@@ -375,7 +377,7 @@ Automated host checks:
   Source-only plugin changes select that job; debugger changes also build its consumer.
 
 Real-Dolphin DAP acceptance passed run
-[38934685398](https://github.com/capz/DolphinDotNet/actions/runs/38934685398) on
+[38934685398](https://github.com/capz/DolphinDotNet.Debuggers/actions/runs/38934685398) on
 `aa63a0499e25fe0c98ba31b6205d792218ee3b5f`: two managed breakpoints, source stepping,
 pause, Inner → Outer → Main stack, Step Out to Outer:14 and Step Over to Outer:15.
 The new increment requires its own CI result; that historical run proves emulator/DAP

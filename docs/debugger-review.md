@@ -56,4 +56,4 @@ requirement.
   these do not establish real USB/EXI compatibility.
 
 See [Rider setup](rider-debugging.md), [Visual Studio setup](visual-studio-debugging.md)
-and [CI selection and independent packaging](ci-selection.md).
+and [CI selection and independent packaging](development.md).

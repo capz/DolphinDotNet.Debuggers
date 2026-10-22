@@ -15,19 +15,11 @@ class DolphinProjectTest {
         assertTrue(DolphinProject.usesSdk("<Project><Import Project='../../sdk/DolphinDotNet.Sdk/Sdk/Sdk.props'/></Project>"));
         assertTrue(DolphinProject.usesSdk("<Project><Import Project='..\\..\\sdk\\DolphinDotNet.Sdk\\Sdk\\Sdk.targets'/></Project>"));
     }
-    @Test void recognizesActualSamplesButNotTheDesktopLibraries() throws Exception {
-        var root = Path.of(System.getProperty("dnd.repositoryRoot"));
-        int samples = 0;
-        try (var directories = Files.list(root.resolve("samples"))) {
-            for (var directory : directories.filter(Files::isDirectory).toList()) {
-                var project = directory.resolve(directory.getFileName() + ".csproj");
-                if (Files.exists(project)) {
-                    assertTrue(DolphinProject.usesSdk(Files.readString(project)), project.toString()); samples++;
-                }
-            }
-        }
-        assertTrue(samples > 0);
-        assertFalse(DolphinProject.usesSdk(Files.readString(root.resolve("src/DolphinDotNet.Core/DolphinDotNet.Core.csproj"))));
+    @Test void recognizesConsumerFixturesButNotDesktopLibraries() throws Exception {
+        var root = Path.of(System.getProperty("dnd.repositoryRoot")).resolve("tests/projects");
+        for (var name : new String[]{"source-import.xml", "nuget-sdk.xml"})
+            assertTrue(DolphinProject.usesSdk(Files.readString(root.resolve(name))), name);
+        assertFalse(DolphinProject.usesSdk(Files.readString(root.resolve("desktop.xml"))));
     }
     @Test void leavesRegularDotnetProjectsAndCommentsAlone() {
         assertFalse(DolphinProject.usesSdk("<Project Sdk='Microsoft.NET.Sdk'/>"));
