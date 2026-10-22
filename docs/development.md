@@ -27,7 +27,7 @@ produces the ELF/source/address metadata; the adapter validates their identities
 
 ## CI and releases
 
-The main workflow runs DAP/RSP tests on Windows and macOS, builds the Rider plugin
+The main workflow runs DAP/RSP tests on Ubuntu 24.04, builds the Rider plugin
 on macOS with JetBrains Plugin Verifier, and builds/verifies the VSIX on Windows.
 Each packaging workflow can also be manually dispatched. PR runs retain Actions
 artifacts. Successful main builds publish a prerelease containing the ZIP and
@@ -35,8 +35,8 @@ VSIX produced by that same run. Marketplace publication and signing remain
 separate release steps; do not publish to a marketplace merely to test packaging.
 
 Interactive IDE sessions and physical BBA/USB Gecko hardware require acceptance
-on those hosts. The serial PTY fixture runs only on Linux; Windows/macOS CI does
-not establish Linux PTY behavior. Local Linux checks remain useful.
+on those hosts. The Linux-only serial PTY fixture runs in the Ubuntu protocol
+job.
 
 ## SDK boundary tests
 
