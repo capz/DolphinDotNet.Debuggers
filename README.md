@@ -5,12 +5,14 @@ Rider and Visual Studio integrations for DolphinDotNet, together with their shar
 
 - [Rider setup and debugging](docs/rider-debugging.md)
 - [Visual Studio setup and debugging](docs/visual-studio-debugging.md)
+- [Upload and debug through Swiss and USB Gecko](docs/usb-gecko-launch.md)
 - [Build, test and release](docs/development.md)
 - [SDK/compiler and native runtime](https://github.com/capz/DolphinDotNet)
 
 Install the plugin ZIP or VSIX from this repository's [Releases](https://github.com/capz/DolphinDotNet.Debuggers/releases)
 or successful Actions artifacts. Build your game using DolphinDotNet.Sdk; these
-extensions attach to the resulting ELF and matching debug metadata. They do not
+extensions attach using the resulting ELF and matching debug metadata, and can
+optionally upload the ELF through Swiss/USB Gecko before attaching. They do not
 compile games or start a CLR on the console. Existing extension IDs and debugger
 protocols are unchanged.
 

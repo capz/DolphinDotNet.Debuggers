@@ -246,6 +246,10 @@ not the host attach profile. No target networking configuration is sent on attac
 
 ## Adapter contract
 
+To start an existing build on a console running Swiss, enable **Upload ELF with
+Swiss, then attach** for a USB Gecko target. See [USB Gecko launching](usb-gecko-launch.md)
+for build/receiver requirements, timeout settings and the DAP `launch` contract.
+
 The `.NET 8` adapter in `tools/DolphinDotNet.DebugAdapter` can also be used directly:
 
 ```sh
@@ -390,7 +394,7 @@ navigation, pause/resume, stack selection and all three step controls against th
 real Dolphin fixture. Verify Stop leaves the emulator alive and no owned breakpoint
 installed. Keep A4.4 physical BBA and USB Gecko validation deferred separately.
 
-Out of scope: DAP launch/build/upload orchestration, automatic target discovery or
+Out of scope: project build orchestration, automatic target discovery or
 slot negotiation, verified hardware compatibility, reconnect, arrays/value types,
 expressions, managed exception filters, async stacks, real thread enumeration,
 reverse execution, Release target debugging and Marketplace

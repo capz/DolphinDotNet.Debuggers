@@ -16,6 +16,9 @@ public sealed class AttachOptions
     public string SerialPort { get; set; } = "COM3";
     public int BaudRate { get; set; } = 115200;
     public int TimeoutSeconds { get; set; } = 10;
+    public bool UploadWithSwiss { get; set; }
+    public int UploadTimeoutSeconds { get; set; } = 60;
+    public int BootDelayMilliseconds { get; set; } = 1000;
     public string SourceFileMapJson { get; set; } = "{}";
     public string HeartbeatHost { get; set; } = "";
     public int HeartbeatPort { get; set; } = 2167;
@@ -60,6 +63,15 @@ public sealed class AttachOptions
             result["serialPort"] = SerialPort.Trim();result["baudRate"] = BaudRate;
         }
         else throw new ArgumentException("Choose TCP or USB Gecko.");
+        if (UploadWithSwiss)
+        {
+            if (Transport != "usbGecko") throw new ArgumentException("Swiss upload requires a USB Gecko target.");
+            if (UploadTimeoutSeconds < 1 || UploadTimeoutSeconds > 120) throw new ArgumentException("Upload timeout must be between 1 and 120 seconds.");
+            if (BootDelayMilliseconds < 0 || BootDelayMilliseconds > 30000) throw new ArgumentException("Boot delay must be between 0 and 30000 milliseconds.");
+            result["request"] = "launch";
+            result["uploadTimeoutSeconds"] = UploadTimeoutSeconds;
+            result["bootDelayMilliseconds"] = BootDelayMilliseconds;
+        }
         if (!string.IsNullOrWhiteSpace(HeartbeatHost))
         {
             var parts = HeartbeatHost.Trim().Split('.');

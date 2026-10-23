@@ -23,6 +23,9 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
     private final DefaultTableModel mappings = new DefaultTableModel(new String[]{"Build source prefix", "Local source prefix"}, 0);
     private final JTable table = new com.intellij.ui.table.JBTable(mappings);
     private String missingId;
+    private final JCheckBox upload = new JCheckBox("Upload ELF with Swiss, then attach");
+    private final JSpinner uploadTimeout = new JSpinner(new SpinnerNumberModel(60, 1, 120, 1));
+    private final JSpinner bootDelay = new JSpinner(new SpinnerNumberModel(1000, 0, 30000, 100));
     AttachEditor(Project project) { this.project = project; }
     @Override protected @NotNull JComponent createEditor() {
         var panel = Forms.form(); panel.setBorder(JBUI.Borders.empty(12));
@@ -48,11 +51,16 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
         mappingContent.setPreferredSize(JBUI.size(500, 150));
         var hideable = new HideableDecorator(mappingPanel, "Source path mappings", false); hideable.setContentComponent(mappingContent);
         Forms.row(panel, 7, "", mappingPanel);
-        Forms.row(panel, 8, "", new JBLabel("The target must already be running its debug build."));
+        Forms.row(panel, 8, "Start on device:", upload);
+        Forms.row(panel, 9, "Upload timeout (seconds):", uploadTimeout);
+        Forms.row(panel, 10, "Boot delay (milliseconds):", bootDelay);
+        Forms.row(panel, 11, "", new JBLabel("For upload, boot Swiss with USB Gecko enabled. Build the ELF with a waiting USB Gecko GDB stub."));
+        upload.addActionListener(e -> updateSummary());
         var root = new JPanel(new BorderLayout()); root.add(panel, BorderLayout.NORTH); return root;
     }
     @Override protected void resetEditorFrom(@NotNull AttachConfiguration config) {
         folder.setText(config.buildFolder); reloadTargets(config.targetId); mappings.setRowCount(0);
+        upload.setSelected(config.uploadWithSwiss); uploadTimeout.setValue(config.uploadTimeoutSeconds); bootDelay.setValue(config.bootDelayMilliseconds); updateSummary();
         config.sourceFileMap.forEach((build, local) -> mappings.addRow(new Object[]{build, local})); updateArtifacts();
     }
     @Override protected void applyEditorTo(@NotNull AttachConfiguration config) throws ConfigurationException {
@@ -65,6 +73,7 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
         config.buildFolder = folder.getText().trim();
         var target = (TargetProfile)targets.getSelectedItem(); config.targetId = target == null ? Objects.toString(missingId, "") : target.id;
         config.sourceFileMap.clear(); config.sourceFileMap.putAll(paths);
+        config.uploadWithSwiss = upload.isSelected(); config.uploadTimeoutSeconds = (Integer)uploadTimeout.getValue(); config.bootDelayMilliseconds = (Integer)bootDelay.getValue();
     }
     private void reloadTargets(String id) {
         missingId = id; targets.removeAllItems(); TargetProfile selected = null;
@@ -74,6 +83,9 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
     private void updateSummary() {
         var t = (TargetProfile)targets.getSelectedItem();
         summary.setText(t == null ? "Select a target or define one using Manage targets…" : t.summary());
+        upload.setEnabled(t != null && "usbGecko".equals(t.transport));
+        if (!upload.isEnabled()) upload.setSelected(false);
+        uploadTimeout.setEnabled(upload.isEnabled() && upload.isSelected()); bootDelay.setEnabled(upload.isEnabled() && upload.isSelected());
     }
     private void updateArtifacts() {
         try {

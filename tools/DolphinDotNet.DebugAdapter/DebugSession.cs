@@ -91,7 +91,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             await TerminatedAsync();
             return;
         }
-        if (command == "attach")
+        if (command is "attach" or "launch")
         {
             if (_client is not null) throw new InvalidOperationException("Already attached.");
             if (_execution is { IsCompleted: false }) throw new InvalidOperationException("Previous target is still shutting down.");
@@ -109,22 +109,35 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             _paths = new SourcePathMapper(args);
             var transport = AttachTransport.Parse(args);
             var heartbeat = DebugHeartbeat.Parse(args);
+            if (command == "launch")
+            {
+                // Validate every setting and the exact ELF identity before touching hardware.
+                var launch = UsbGeckoLaunch.Parse(args, transport, _symbols);
+                await connection.EventAsync("output", new { category = "console", output = $"Uploading {Path.GetFileName(Required(args, "elf"))} via USB Gecko to Swiss ({launch.Upload.ImageSize} bytes).\n" });
+                await launch.Upload.SendUsbGeckoAsync(transport.SerialPort!, transport.BaudRate, launch.Timeout, _lifetime.Token);
+                await connection.EventAsync("output", new { category = "console", output = "Upload sent; Swiss provides no acknowledgement. Waiting for the application's USB Gecko GDB stub.\n" });
+                await Task.Delay(launch.BootDelayMilliseconds, _lifetime.Token);
+            }
             using var timeout = new CancellationTokenSource(transport.Timeout);
-            _client = transport.Kind == "usbGecko"
-                ? RspClient.ConnectUsbGecko(transport.SerialPort!, transport.BaudRate, transport.Timeout)
-                : await RspClient.ConnectTcpAsync(transport.Host!, transport.Port, transport.Timeout, timeout.Token);
             try
             {
+                _client = transport.Kind == "usbGecko"
+                    ? RspClient.ConnectUsbGecko(transport.SerialPort!, transport.BaudRate, transport.Timeout)
+                    : await RspClient.ConnectTcpAsync(transport.Host!, transport.Port, transport.Timeout, timeout.Token);
                 _stop = await new SourceStepper(_client, _symbols).ReadProgramCounterAsync(await _client.QueryStopAsync());
                 if (_stop.Exited) throw new InvalidOperationException("Target has exited.");
                 _breakpoints = new BreakpointRegistry(_client, () => _pauseRequested);
                 await ReportDebuggerTelemetryAsync(true);
                 await ConfigureHeartbeatAsync(heartbeat);
             }
-            catch
+            catch (Exception error)
             {
                 await StopHeartbeatAsync();
-                await _client.DisposeAsync(); _client = null; throw;
+                if (_client is not null) await _client.DisposeAsync();
+                _client = null;
+                if (command == "launch")
+                    throw new IOException($"Swiss upload was sent, but GDB attach failed: {error.Message} Check the waiting USB Gecko GDB build and boot delay; return to Swiss before retrying.", error);
+                throw;
             }
             await connection.RespondAsync(request);
             await connection.EventAsync("initialized");
@@ -319,7 +332,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _execution = ExecuteAsync(command);
                 break;
             default:
-                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only stopped inspection is supported; launch and evaluation are not implemented.");
+                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only stopped inspection is supported; evaluation is not implemented.");
         }
     }
 

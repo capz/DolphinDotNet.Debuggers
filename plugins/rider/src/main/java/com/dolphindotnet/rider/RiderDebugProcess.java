@@ -64,7 +64,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     }
     @Override public void sessionInitialized() {
         submit(() -> {
-            await(dap.start(arguments)); ready = true; syncBreakpoints();
+            dap.start(arguments).get(305, TimeUnit.SECONDS); ready = true; syncBreakpoints();
             await(dap.server.configurationDone(new ConfigurationDoneArguments()));
         });
     }

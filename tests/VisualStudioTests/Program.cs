@@ -20,6 +20,16 @@ try
     options.Transport="usbGecko";options.SerialPort="COM8";
     launch=options.CreateLaunch(adapter);
     Check((string?)launch["serialPort"]=="COM8" && launch["port"]==null && (int?)launch["baudRate"]==115200,"USB arguments");
+    options.UploadWithSwiss=true;options.UploadTimeoutSeconds=90;options.BootDelayMilliseconds=2500;
+    launch=options.CreateLaunch(adapter);
+    Check((string?)launch["request"]=="launch" && (int?)launch["uploadTimeoutSeconds"]==90 && (int?)launch["bootDelayMilliseconds"]==2500,"Swiss launch arguments");
+    var launchSettings=Path.Combine(root,"launch-settings.json");options.Save(launchSettings);
+    var restoredLaunch=AttachOptions.Load(launchSettings);
+    Check(restoredLaunch.UploadWithSwiss && restoredLaunch.UploadTimeoutSeconds==90 && restoredLaunch.BootDelayMilliseconds==2500,"Swiss settings roundtrip");
+    options.Transport="tcp";Reject(()=>options.CreateLaunch(adapter));options.Transport="usbGecko";
+    options.UploadTimeoutSeconds=0;Reject(()=>options.CreateLaunch(adapter));options.UploadTimeoutSeconds=60;
+    options.BootDelayMilliseconds=30001;Reject(()=>options.CreateLaunch(adapter));options.BootDelayMilliseconds=1000;
+    options.UploadWithSwiss=false;
     options.HeartbeatHost="192.168.1.8";options.HeartbeatPort=0;
     Check((int?)options.CreateLaunch(adapter)["heartbeatPort"]==0,"automatic heartbeat port");
     options.HeartbeatHost="224.1.1.1";Reject(()=>options.CreateLaunch(adapter));options.HeartbeatHost="";

@@ -52,7 +52,7 @@ public sealed class AttachPackage : AsyncPackage
             var launch = settings.CreateLaunch(adapter);
             settings.Save(settingsPath);
             // The documented host command accepts one configuration object,
-            // including request=attach. This is not a .NET project launch profile.
+            // including request=attach or launch. This is not a .NET project launch profile.
             var launchPath = Path.Combine(folder, "launch.json");
             File.WriteAllText(launchPath, launch.ToString(Formatting.Indented));
             dte.ExecuteCommand("DebugAdapterHost.Launch", "/LaunchJson:\"" + launchPath + "\" /EngineGuid:\"{CD5691AC-E370-44AB-94CC-5940CD02A820}\"");
