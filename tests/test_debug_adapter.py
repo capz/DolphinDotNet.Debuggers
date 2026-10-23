@@ -15,6 +15,7 @@ import tempfile
 import threading
 import time
 import unittest
+import zlib
 
 spec = importlib.util.spec_from_file_location("dap_probe", Path(__file__).resolve().parents[1] / "scripts/dnd_dap_probe.py")
 probe = importlib.util.module_from_spec(spec)
@@ -179,18 +180,39 @@ class Target:
 
 class SerialRelay:
     """PTY byte transport to the fake RSP target. No physical USB/EXI emulation."""
-    def __init__(self, port):
+    def __init__(self, port, upload=None, arguments=None):
         import tty
         self.master, self.slave = os.openpty()
         tty.setraw(self.slave)
         self.path = os.ttyname(self.slave)
         self.peer = socket.create_connection(("127.0.0.1", port))
         self.stopping = threading.Event()
+        self.expected_upload = upload
+        self.expected_arguments = arguments
+        self.upload_received = threading.Event()
+        self.errors = []
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
     def run(self):
         try:
+            if self.expected_upload is not None:
+                def read_exact(size):
+                    data = b''
+                    deadline = time.monotonic() + 10
+                    while len(data) < size:
+                        if self.stopping.is_set() or time.monotonic() > deadline:
+                            raise TimeoutError('Incomplete wiiload frame')
+                        ready, _, _ = select.select([self.master], [], [], .1)
+                        if ready:
+                            data += os.read(self.master, size - len(data))
+                    return data
+                magic, version, arg_size, compressed_size, image_size = struct.unpack('>4sHHII', read_exact(16))
+                assert (magic, version) == (b'HAXX', 5)
+                assert image_size == len(self.expected_upload)
+                assert zlib.decompress(read_exact(compressed_size)) == self.expected_upload
+                assert read_exact(arg_size) == self.expected_arguments
+                self.upload_received.set()  # No ACK: next bytes must be GDB/RSP, after the port is reopened.
             while not self.stopping.is_set():
                 ready, _, _ = select.select([self.master, self.peer], [], [], 0.1)
                 for source in ready:
@@ -201,9 +223,9 @@ class SerialRelay:
                         self.peer.sendall(data)
                     else:
                         os.write(self.master, data)
-        except OSError:
+        except Exception as error:
             if not self.stopping.is_set():
-                raise
+                self.errors.append(error)
 
     def close(self):
         self.stopping.set()
@@ -271,6 +293,7 @@ class AdapterTests(unittest.TestCase):
         self.client.close()
         if self.serial_relay:
             self.serial_relay.close()
+            self.assertFalse(self.serial_relay.errors, self.serial_relay.errors)
         if self.telemetry_relay:
             self.telemetry_relay.close()
         if self.target:
@@ -998,6 +1021,55 @@ class AdapterTests(unittest.TestCase):
         result = subprocess.run(["dotnet", str(ADAPTER), "--list-serial-ports"],
                                 capture_output=True, text=True, timeout=15, check=True)
         self.assertIsInstance(json.loads(result.stdout), list)
+
+    def test_swiss_launch_validation_precedes_opening_serial_port(self):
+        base = dict(transport='usbGecko', serialPort='not-a-device', baudRate=115200,
+                    elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address))
+        for options, message in [({'transport': 'tcp', 'host': 'localhost', 'port': 1}, 'requires transport'),
+                ({'uploadTimeoutSeconds': 0}, 'uploadTimeoutSeconds'),
+                ({'uploadTimeoutSeconds': 121}, 'uploadTimeoutSeconds'),
+                ({'bootDelayMilliseconds': -1}, 'bootDelayMilliseconds'),
+                ({'bootDelayMilliseconds': 30001}, 'bootDelayMilliseconds'),
+                ({'programArguments': ['bad\0argument']}, 'NUL'),
+                ({'programArguments': ['é' * 1024]}, '1024'),
+                ({'noDebug': True}, 'noDebug')]:
+            with self.subTest(options=options):
+                result = self.client.request('launch', base | options, success=False)
+                self.assertIn(message, result['message'])
+        self.assertFalse(any(e.get('event') == 'initialized' for e in self.client.events))
+
+    def test_swiss_launch_rejects_stale_elf_before_opening_serial_port(self):
+        self.elf.write_bytes(b'changed ELF')
+        result = self.client.request('launch', dict(transport='usbGecko', serialPort='not-a-device',
+            baudRate=115200, elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address)), success=False)
+        self.assertIn('same supported build', result['message'])
+
+    def test_swiss_launch_open_failure_can_be_followed_by_normal_attach(self):
+        result = self.client.request('launch', dict(transport='usbGecko', serialPort='not-a-device',
+            baudRate=115200, elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address)), success=False)
+        self.assertTrue(result.get('message'))
+        self.attach()
+        self.assertTrue(self.bp()[0]['verified'])
+
+    @unittest.skipUnless(sys.platform.startswith('linux'), 'Linux pseudo-terminal upload/RSP handoff')
+    def test_swiss_upload_then_usb_debug_on_the_same_serial_port(self):
+        self.target = Target()
+        self.serial_relay = SerialRelay(self.target.port, self.elf.read_bytes(), b'Game.elf\0--name\0two words\0\0')
+        self.client.request('launch', dict(transport='usbGecko', serialPort=self.serial_relay.path,
+            baudRate=115200, timeoutSeconds=3, uploadTimeoutSeconds=3, bootDelayMilliseconds=50,
+            elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address),
+            programArguments=['--name', 'two words'], sourceFileMap={'/build/日本': '/local/日本'}))
+        self.assertTrue(self.serial_relay.upload_received.is_set())
+        self.client.event('initialized')
+        self.bp(lines=(11,))
+        self.client.request('configurationDone')
+        self.client.event('stopped')
+        self.client.request('continue', dict(threadId=1))
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.assertEqual(0, self.client.process.wait(timeout=5))
+        self.assertFalse(self.target.breakpoints)
 
     def test_lifecycle_breakpoints_shared_ownership_and_stepping(self):
         self.attach()

@@ -17,6 +17,7 @@ public sealed class SourceAddressMap
     private readonly List<UnwindRule> _unwind = new();
     private readonly Dictionary<string, List<DebugVariable>> _variables = new(StringComparer.Ordinal);
     private IReadOnlyDictionary<uint, DebugObjectLayout> _objectLayouts = new Dictionary<uint, DebugObjectLayout>();
+    public string ElfSha256 { get; private set; } = "";
     public uint? DebuggerTelemetryAddress { get; private set; }
     public uint? DebuggerHeartbeatAddress { get; private set; }
     public bool DebuggerHeartbeatSupported { get; private set; }
@@ -33,7 +34,7 @@ public sealed class SourceAddressMap
             !string.Equals(root.GetProperty("elfSha256").GetString(), Convert.ToHexString(SHA256.HashData(binary)), StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(root.GetProperty("sourceMapSha256").GetString(), Convert.ToHexString(SHA256.HashData(source)), StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("ELF and C# debug metadata must belong to the same supported build.");
-        var result = new SourceAddressMap();
+        var result = new SourceAddressMap { ElfSha256 = root.GetProperty("elfSha256").GetString()! };
         result._objectLayouts = ObjectLayouts.Load(root);
         if (root.TryGetProperty("debuggerTelemetry", out var telemetry))
         {

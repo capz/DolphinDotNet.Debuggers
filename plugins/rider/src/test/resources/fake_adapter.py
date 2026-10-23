@@ -56,7 +56,7 @@ while True:
     elif cmd == "continue":
         body = dict(allThreadsContinued=True)
     send(dict(type="response", request_seq=req["seq"], command=cmd, success=True, body=body))
-    if cmd == "attach" and mode != "missingInitialized":
+    if cmd in ("attach", "launch") and mode != "missingInitialized":
         event("initialized")
     elif cmd == "configurationDone":
         event("stopped", reason="entry", threadId=1, allThreadsStopped=True)

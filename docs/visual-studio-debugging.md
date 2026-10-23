@@ -1,5 +1,9 @@
 # Visual Studio debugging
 
+For a console running Swiss, select USB Gecko and enable **Upload ELF with Swiss,
+then attach** in the attach dialog. See [USB Gecko launching](usb-gecko-launch.md)
+for build/receiver requirements, upload timeouts and troubleshooting.
+
 Game/sample build commands below refer to the [SDK repository](https://github.com/capz/DolphinDotNet), which owns the samples. Plugin and adapter build commands run in this repository.
 
 The DolphinDotNet VSIX adds **Debug → Attach to DolphinDotNet…** to Visual Studio

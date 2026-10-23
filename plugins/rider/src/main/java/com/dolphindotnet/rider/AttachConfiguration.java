@@ -14,6 +14,8 @@ import java.util.*;
 public final class AttachConfiguration extends RunConfigurationBase<Element> {
     String buildFolder = "$PROJECT_DIR$/artifacts/ManagedGameCube";
     String targetId = "";
+    boolean uploadWithSwiss;
+    int uploadTimeoutSeconds = 60, bootDelayMilliseconds = 1000;
     final Map<String, String> sourceFileMap = new LinkedHashMap<>();
     AttachConfiguration(Project project, ConfigurationFactory factory, String name) { super(project, factory, name); }
     @Override public @NotNull SettingsEditor<? extends RunConfiguration> getConfigurationEditor() { return new AttachEditor(getProject()); }
@@ -23,6 +25,7 @@ public final class AttachConfiguration extends RunConfigurationBase<Element> {
         if (target == null) throw new IllegalArgumentException("Select a saved target. Use Manage targets to define one on this computer.");
         var args = new LinkedHashMap<>(target.attachArguments());
         args.putAll(BuildArtifacts.discover(folder()).attachArguments());
+        SwissLaunch.apply(args, uploadWithSwiss, uploadTimeoutSeconds, bootDelayMilliseconds);
         var mappings = new LinkedHashMap<String, String>();
         for (var entry : sourceFileMap.entrySet()) mappings.put(entry.getKey(), PathMacroManager.getInstance(getProject()).expandPath(entry.getValue()));
         args.put("sourceFileMap", mappings); return args;
@@ -37,11 +40,17 @@ public final class AttachConfiguration extends RunConfigurationBase<Element> {
     @Override public void readExternal(@NotNull Element element) {
         super.readExternal(element);
         buildFolder = element.getAttributeValue("buildFolder", buildFolder); targetId = element.getAttributeValue("targetId", "");
+        uploadWithSwiss = Boolean.parseBoolean(element.getAttributeValue("uploadWithSwiss", "false"));
+        uploadTimeoutSeconds = Integer.parseInt(element.getAttributeValue("uploadTimeoutSeconds", "60"));
+        bootDelayMilliseconds = Integer.parseInt(element.getAttributeValue("bootDelayMilliseconds", "1000"));
         sourceFileMap.clear();
         for (var mapping : element.getChildren("sourceMapping")) sourceFileMap.put(mapping.getAttributeValue("build"), mapping.getAttributeValue("local"));
     }
     @Override public void writeExternal(@NotNull Element element) {
         super.writeExternal(element); element.setAttribute("buildFolder", buildFolder); element.setAttribute("targetId", targetId);
+        element.setAttribute("uploadWithSwiss", Boolean.toString(uploadWithSwiss));
+        element.setAttribute("uploadTimeoutSeconds", Integer.toString(uploadTimeoutSeconds));
+        element.setAttribute("bootDelayMilliseconds", Integer.toString(bootDelayMilliseconds));
         for (var mapping : sourceFileMap.entrySet()) element.addContent(new Element("sourceMapping").setAttribute("build", mapping.getKey()).setAttribute("local", mapping.getValue()));
     }
     @Override public AttachConfiguration clone() {

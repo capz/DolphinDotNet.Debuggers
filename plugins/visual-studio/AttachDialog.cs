@@ -9,6 +9,8 @@ internal sealed class AttachDialog : Form
     private readonly TextBox build = new TextBox(), host = new TextBox(), serial = new TextBox(), mappings = new TextBox(), heartbeat = new TextBox();
     private readonly NumericUpDown port = Number(1,65535), baud = Number(1,2000000), timeout = Number(1,120), heartbeatPort = Number(0,65535);
     private readonly ComboBox transport = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly CheckBox upload = new CheckBox { Text = "Upload ELF with Swiss, then attach", AutoSize = true };
+    private readonly NumericUpDown uploadTimeout = Number(1,120), bootDelay = Number(0,30000);
     private readonly string adapter;
     public AttachOptions Options { get; private set; }
     public AttachDialog(AttachOptions options, string adapter)
@@ -28,10 +30,11 @@ internal sealed class AttachDialog : Form
         transport.Items.AddRange(new object[] { "BBA / TCP", "USB Gecko" });transport.SelectedIndex = options.Transport=="usbGecko" ? 1 : 0;
         Add(layout,"Transport",transport);Add(layout,"Host",host);Add(layout,"TCP port",port);
         Add(layout,"Serial port",serial);Add(layout,"Driver baud rate",baud);Add(layout,"Timeout (seconds)",timeout);
+        Add(layout,"Start on device",upload);Add(layout,"Upload timeout (seconds)",uploadTimeout);Add(layout,"Boot delay (milliseconds)",bootDelay);
         Add(layout,"Live status IPv4 (optional)",heartbeat);Add(layout,"Live status UDP port",heartbeatPort);
         mappings.Multiline = true;mappings.ScrollBars = ScrollBars.Both;mappings.Height = 100;
         Add(layout,"Source mappings (JSON)",mappings);
-        var help = new Label { Text = "Start a matching Debug DOL with Dolphin's GDB stub waiting before attaching. Source mappings map build prefixes to local source prefixes. USB Gecko's EXI slot is selected when building the DOL.", AutoSize = true, MaximumSize = new Size(500,0) };
+        var help = new Label { Text = "For Swiss upload, boot Swiss with USB Gecko enabled, then select a Debug ELF built with a waiting USB Gecko GDB stub. Otherwise start the matching debug build before attaching. The EXI slot is selected at build time.", AutoSize = true, MaximumSize = new Size(500,0) };
         Add(layout,"",help);
         var buttons = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
         var attach = new Button { Text = "Attach", AutoSize = true };
@@ -41,6 +44,8 @@ internal sealed class AttachDialog : Form
         build.Text=options.BuildFolder;host.Text=options.Host;port.Value=Bound(options.Port,port);
         serial.Text=options.SerialPort;baud.Value=Bound(options.BaudRate,baud);timeout.Value=Bound(options.TimeoutSeconds,timeout);
         mappings.Text=options.SourceFileMapJson;heartbeat.Text=options.HeartbeatHost;heartbeatPort.Value=Bound(options.HeartbeatPort,heartbeatPort);
+        upload.Checked=options.UploadWithSwiss;uploadTimeout.Value=Bound(options.UploadTimeoutSeconds,uploadTimeout);bootDelay.Value=Bound(options.BootDelayMilliseconds,bootDelay);
+        upload.CheckedChanged += (_, __) => UpdateTransport();
         transport.SelectedIndexChanged += (_, __) => UpdateTransport();UpdateTransport();
     }
     private void Save()
@@ -50,11 +55,17 @@ internal sealed class AttachDialog : Form
             var value = new AttachOptions { BuildFolder=build.Text.Trim(), Transport=transport.SelectedIndex==0 ? "tcp" : "usbGecko",
                 Host=host.Text.Trim(),Port=(int)port.Value,SerialPort=serial.Text.Trim(),BaudRate=(int)baud.Value,TimeoutSeconds=(int)timeout.Value,
                 SourceFileMapJson=mappings.Text,HeartbeatHost=heartbeat.Text.Trim(),HeartbeatPort=(int)heartbeatPort.Value };
+            value.UploadWithSwiss=upload.Checked;value.UploadTimeoutSeconds=(int)uploadTimeout.Value;value.BootDelayMilliseconds=(int)bootDelay.Value;
             value.CreateLaunch(adapter);Options=value;DialogResult=DialogResult.OK;Close();
         }
         catch (Exception error) { MessageBox.Show(this,error.Message,"Check attach settings",MessageBoxButtons.OK,MessageBoxIcon.Warning); }
     }
-    private void UpdateTransport() { host.Enabled=port.Enabled=transport.SelectedIndex==0;serial.Enabled=baud.Enabled=transport.SelectedIndex==1; }
+    private void UpdateTransport() {
+        host.Enabled=port.Enabled=transport.SelectedIndex==0;serial.Enabled=baud.Enabled=transport.SelectedIndex==1;
+        upload.Enabled=transport.SelectedIndex==1;
+        if (!upload.Enabled) upload.Checked=false;
+        uploadTimeout.Enabled=bootDelay.Enabled=upload.Enabled && upload.Checked;
+    }
     private static NumericUpDown Number(int min,int max) => new NumericUpDown { Minimum=min,Maximum=max };
     private static decimal Bound(int value,NumericUpDown control) => Math.Max(control.Minimum,Math.Min(control.Maximum,value));
     private static void Add(TableLayoutPanel layout,string label,Control control)

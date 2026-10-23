@@ -10,6 +10,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DapClientTest {
     @TempDir Path temp;
+    @Test void launchUsesSharedAdapterAndWaitsForInitialized() throws Exception {
+        Path peer = temp.resolve("launch.py"), log = temp.resolve("launch.jsonl");
+        try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
+        var process = new ProcessBuilder("python3", peer.toString(), log.toString()).start();
+        var client = new DapClient(process, new DapClient.Listener() {
+            @Override public void stopped(StoppedEventArguments args) { }
+            @Override public void continued() { }
+            @Override public void output(String text, boolean error) { }
+            @Override public void terminated() { }
+        });
+        try {
+            var args = new LinkedHashMap<String, Object>(Map.of("transport", "usbGecko", "elf", "/build/Game.elf"));
+            SwissLaunch.apply(args, true, 60, 1000);
+            client.start(args).get(10, TimeUnit.SECONDS);
+            assertTrue(Files.readString(log).contains("\"command\": \"launch\""));
+            assertFalse(Files.readString(log).contains("\"command\": \"attach\""));
+        } finally { client.close(); }
+        assertTrue(process.waitFor(10, TimeUnit.SECONDS));
+    }
     @Test void initializeAttachConfigurePauseStackStepsAndDisconnect() throws Exception {
         Path peer = temp.resolve("peer.py"), log = temp.resolve("requests.jsonl");
         try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
