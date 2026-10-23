@@ -64,6 +64,7 @@ def exchange(read, write, expected, *, reject=False, wrong_nonce=False, native_c
             write(accepted)
             native_write(read_exact(read, 16))
             write(read_exact(process.stdout.read, 16))
+            native_write(read_exact(read, 16))  # COMMIT after EXECUTING reached the host.
             process.stdin.close()
             assert process.wait(timeout=5) == 0, process.stderr.read()
             assert b'VALIDATED entry=80004000 segments=1' in process.stderr.read()
@@ -97,6 +98,7 @@ def exchange(read, write, expected, *, reject=False, wrong_nonce=False, native_c
     write(frame(4, value, detail))
     assert read_exact(read, 16) == frame(5, nonce)
     write(frame(6, nonce))
+    assert read_exact(read, 16) == frame(9, nonce)
     return True
 
 

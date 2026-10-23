@@ -25,7 +25,7 @@ public sealed record LauncherEndpoint(string Transport, string? Host, int Port, 
 public static class LauncherProtocol
 {
     public const uint MaximumImageBytes = 16 * 1024 * 1024 - 4096;
-    public const ushort Hello = 1, Ready = 2, Upload = 3, Accepted = 4, Execute = 5, Executing = 6, Error = 7, Cancel = 8;
+    public const ushort Hello = 1, Ready = 2, Upload = 3, Accepted = 4, Execute = 5, Executing = 6, Error = 7, Cancel = 8, Commit = 9;
 
     public static uint Crc32(ReadOnlySpan<byte> data)
     {
@@ -93,6 +93,8 @@ public static class LauncherProtocol
         var executing = await ReceiveAsync(stream, Executing, token).ConfigureAwait(false);
         if (executing.Value != nonce || executing.Detail != 0)
             throw new InvalidDataException("Invalid execution acknowledgement. Console state is unknown; return to the launcher before retrying.");
+        // The native receiver must know this ACK reached the host before shutting down the NIC.
+        await SendAsync(stream, Commit, nonce, 0, token).ConfigureAwait(false);
     }
 }
 

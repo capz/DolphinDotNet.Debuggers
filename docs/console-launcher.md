@@ -110,6 +110,9 @@ configure the uploaded application's network or change its GDB transport.
 DNDL uses 16-byte `DNDL`/version-1 frames, big-endian fields, a per-session nonce,
 uncompressed ELF bytes and IEEE CRC32. See the native launcher README for the
 complete wire contract. CRC32/nonce are not authentication; use a trusted LAN.
+After the execution acknowledgement the host sends a final COMMIT, proving that
+the last reply arrived before the console shuts down networking. The receiver
+does not execute without that confirmation.
 
 The suites cover host protocol limits and stale/wrong replies; readiness-only
 probe/cancel; BBA upload, execution acknowledgement and GDB breakpoints; Linux

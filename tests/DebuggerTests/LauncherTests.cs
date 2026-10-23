@@ -20,7 +20,8 @@ static class LauncherTests
             Check(sent.AsSpan(0, 16).SequenceEqual(Reply(LauncherProtocol.Hello, Nonce, 0)), "exact hello frame");
             Check(sent.AsSpan(16, 16).SequenceEqual(Reply(LauncherProtocol.Upload, (uint)image.Length, crc)), "upload header");
             Check(sent.AsSpan(32, image.Length).SequenceEqual(image), "complete uncompressed ELF");
-            Check(sent.AsSpan(32 + image.Length).SequenceEqual(Reply(LauncherProtocol.Execute, Nonce, 0)), "execute after validated acknowledgement");
+            Check(sent.AsSpan(32 + image.Length, 16).SequenceEqual(Reply(LauncherProtocol.Execute, Nonce, 0)), "execute after validated acknowledgement");
+            Check(sent.AsSpan(48 + image.Length).SequenceEqual(Reply(LauncherProtocol.Commit, Nonce, 0)), "commit after execution ACK reaches host");
             Check(stream.LargestWrite <= 3968, "serial FIFO chunks");
         }
         foreach (var ready in new[] { Reply(LauncherProtocol.Ready, Nonce + 1, 1000), Reply(LauncherProtocol.Ready, Nonce, 1), Reply(LauncherProtocol.Accepted, Nonce, 1000), Reply(LauncherProtocol.Ready, Nonce, uint.MaxValue) })
@@ -38,6 +39,11 @@ static class LauncherTests
         {
             await RejectAsync<InvalidDataException>(() => LauncherProtocol.UploadAndExecuteAsync(stream, Nonce, 16000, image));
             Check(stream.Output.Length == 16 + image.Length, "rejected ELF cannot execute");
+        }
+        using (var stream = new Duplex(Reply(LauncherProtocol.Accepted, (uint)image.Length, crc), Reply(LauncherProtocol.Executing, Nonce + 1, 0)))
+        {
+            await RejectAsync<InvalidDataException>(() => LauncherProtocol.UploadAndExecuteAsync(stream, Nonce, 16000, image));
+            Check(stream.Output.Length == 32 + image.Length, "invalid execution ACK cannot send final COMMIT");
         }
         using (var stream = new Duplex())
         {
