@@ -112,11 +112,21 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (command == "launch")
             {
                 // Validate every setting and the exact ELF identity before touching hardware.
-                var launch = UsbGeckoLaunch.Parse(args, transport, _symbols);
-                await connection.EventAsync("output", new { category = "console", output = $"Uploading {Path.GetFileName(Required(args, "elf"))} via USB Gecko to Swiss ({launch.Upload.ImageSize} bytes).\n" });
-                await launch.Upload.SendUsbGeckoAsync(transport.SerialPort!, transport.BaudRate, launch.Timeout, _lifetime.Token);
-                await connection.EventAsync("output", new { category = "console", output = "Upload sent; Swiss provides no acknowledgement. Waiting for the application's USB Gecko GDB stub.\n" });
-                await Task.Delay(launch.BootDelayMilliseconds, _lifetime.Token);
+                var launcher = args.TryGetProperty("launcher", out var mode) ? mode.GetString() : "swiss";
+                if (launcher == "dolphinDotNet")
+                {
+                    var launch = ConsoleLauncher.Parse(args, transport, _symbols);
+                    await launch.LaunchAsync(text => connection.EventAsync("output", new { category = "console", output = text }), _lifetime.Token);
+                }
+                else if (launcher == "swiss")
+                {
+                    var launch = UsbGeckoLaunch.Parse(args, transport, _symbols);
+                    await connection.EventAsync("output", new { category = "console", output = $"Uploading {Path.GetFileName(Required(args, "elf"))} via USB Gecko to Swiss ({launch.Upload.ImageSize} bytes).\n" });
+                    await launch.Upload.SendUsbGeckoAsync(transport.SerialPort!, transport.BaudRate, launch.Timeout, _lifetime.Token);
+                    await connection.EventAsync("output", new { category = "console", output = "Upload sent; Swiss provides no acknowledgement. Waiting for the application's USB Gecko GDB stub.\n" });
+                    await Task.Delay(launch.BootDelayMilliseconds, _lifetime.Token);
+                }
+                else throw new ArgumentException("launcher must be swiss or dolphinDotNet.");
             }
             using var timeout = new CancellationTokenSource(transport.Timeout);
             try
@@ -136,7 +146,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 if (_client is not null) await _client.DisposeAsync();
                 _client = null;
                 if (command == "launch")
-                    throw new IOException($"Swiss upload was sent, but GDB attach failed: {error.Message} Check the waiting USB Gecko GDB build and boot delay; return to Swiss before retrying.", error);
+                    throw new IOException($"ELF launch was requested, but GDB attach failed: {error.Message} Check the application's waiting GDB stub and boot delay; return to the selected launcher before retrying.", error);
                 throw;
             }
             await connection.RespondAsync(request);

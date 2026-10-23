@@ -28,7 +28,7 @@ final class DapClient implements AutoCloseable {
     private volatile Future<?> listening;
     private volatile CompletableFuture<Void> startup;
     private final long requestMillis, disconnectMillis;
-    DapClient(Process process, Listener listener) { this(process, listener, Duration.ofSeconds(300), Duration.ofSeconds(5)); }
+    DapClient(Process process, Listener listener) { this(process, listener, Duration.ofSeconds(350), Duration.ofSeconds(5)); }
     DapClient(Process process, Listener listener, Duration requestTimeout, Duration disconnectTimeout) {
         this.process = process; this.listener = listener;
         requestMillis = requestTimeout.toMillis(); disconnectMillis = disconnectTimeout.toMillis();
