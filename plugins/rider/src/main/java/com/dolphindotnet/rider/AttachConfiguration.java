@@ -15,6 +15,8 @@ public final class AttachConfiguration extends RunConfigurationBase<Element> {
     String buildFolder = "$PROJECT_DIR$/artifacts/ManagedGameCube";
     String targetId = "";
     boolean uploadWithSwiss;
+    boolean useDolphinDotNetLauncher;
+    int launcherPort = 4299, readyTimeoutSeconds = 30;
     int uploadTimeoutSeconds = 60, bootDelayMilliseconds = 1000;
     final Map<String, String> sourceFileMap = new LinkedHashMap<>();
     AttachConfiguration(Project project, ConfigurationFactory factory, String name) { super(project, factory, name); }
@@ -26,6 +28,7 @@ public final class AttachConfiguration extends RunConfigurationBase<Element> {
         var args = new LinkedHashMap<>(target.attachArguments());
         args.putAll(BuildArtifacts.discover(folder()).attachArguments());
         SwissLaunch.apply(args, uploadWithSwiss, uploadTimeoutSeconds, bootDelayMilliseconds);
+        ConsoleLaunch.apply(args, useDolphinDotNetLauncher, launcherPort, readyTimeoutSeconds, uploadTimeoutSeconds, bootDelayMilliseconds);
         var mappings = new LinkedHashMap<String, String>();
         for (var entry : sourceFileMap.entrySet()) mappings.put(entry.getKey(), PathMacroManager.getInstance(getProject()).expandPath(entry.getValue()));
         args.put("sourceFileMap", mappings); return args;
@@ -41,6 +44,9 @@ public final class AttachConfiguration extends RunConfigurationBase<Element> {
         super.readExternal(element);
         buildFolder = element.getAttributeValue("buildFolder", buildFolder); targetId = element.getAttributeValue("targetId", "");
         uploadWithSwiss = Boolean.parseBoolean(element.getAttributeValue("uploadWithSwiss", "false"));
+        useDolphinDotNetLauncher = Boolean.parseBoolean(element.getAttributeValue("useDolphinDotNetLauncher", "false"));
+        launcherPort = Integer.parseInt(element.getAttributeValue("launcherPort", "4299"));
+        readyTimeoutSeconds = Integer.parseInt(element.getAttributeValue("readyTimeoutSeconds", "30"));
         uploadTimeoutSeconds = Integer.parseInt(element.getAttributeValue("uploadTimeoutSeconds", "60"));
         bootDelayMilliseconds = Integer.parseInt(element.getAttributeValue("bootDelayMilliseconds", "1000"));
         sourceFileMap.clear();
@@ -49,6 +55,9 @@ public final class AttachConfiguration extends RunConfigurationBase<Element> {
     @Override public void writeExternal(@NotNull Element element) {
         super.writeExternal(element); element.setAttribute("buildFolder", buildFolder); element.setAttribute("targetId", targetId);
         element.setAttribute("uploadWithSwiss", Boolean.toString(uploadWithSwiss));
+        element.setAttribute("useDolphinDotNetLauncher", Boolean.toString(useDolphinDotNetLauncher));
+        element.setAttribute("launcherPort", Integer.toString(launcherPort));
+        element.setAttribute("readyTimeoutSeconds", Integer.toString(readyTimeoutSeconds));
         element.setAttribute("uploadTimeoutSeconds", Integer.toString(uploadTimeoutSeconds));
         element.setAttribute("bootDelayMilliseconds", Integer.toString(bootDelayMilliseconds));
         for (var mapping : sourceFileMap.entrySet()) element.addContent(new Element("sourceMapping").setAttribute("build", mapping.getKey()).setAttribute("local", mapping.getValue()));
