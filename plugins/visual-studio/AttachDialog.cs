@@ -63,7 +63,7 @@ internal sealed class AttachDialog : Form
         launchMode.SelectedIndexChanged += (_, __) => UpdateTransport();
         host.TextChanged += (_, __) => InvalidateProbe();serial.TextChanged += (_, __) => InvalidateProbe();
         port.ValueChanged += (_, __) => InvalidateProbe();baud.ValueChanged += (_, __) => InvalidateProbe();launcherPort.ValueChanged += (_, __) => InvalidateProbe();
-        checkReady.Click += (_, __) => ThreadHelper.JoinableTaskFactory.RunAsync(CheckReadyAsync).FileAndForget("DolphinDotNet/LauncherProbe");
+        checkReady.Click += (_, __) => CheckReadyAsync().FileAndForget("DolphinDotNet/LauncherProbe");
         transport.SelectedIndexChanged += (_, __) => UpdateTransport();UpdateTransport();
     }
     private void Save()
