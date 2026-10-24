@@ -8,7 +8,7 @@ configurations for multilaunch workflows. It uses public XDebugger APIs and Ecli
 (build 262)**, Java 25, Gradle 9.1.0 and IntelliJ Platform Gradle Plugin 2.19.0;
 LSP4J debug is pinned to 0.24.0. Compatibility is currently limited to 262.*.
 
-> Rider menu: use **Run → Attach to DolphinDotNet…** after starting the target's
+> Rider menu: use **Run → Attach to Nintendo GameCube…** after starting the target's
 > debug build. The dialog provides the build folder, saved targets/Manage targets,
 > and optional source mappings. It remembers project-local settings without
 > changing the selected launch configuration. Existing attach configurations and
@@ -88,7 +88,7 @@ interrupted native cleanup and NuGet restore errors.
    **<sample> in Dolphin (play without debugger)** launch keeps its own settings.
    For a console, start
    the matching debug DOL with its GDB stub waiting/stopped; upload remains external.
-2. Choose **Run → Attach to DolphinDotNet…**. Choose the debug build
+2. Choose **Run → Attach to Nintendo GameCube…**. Choose the debug build
    folder containing exactly one `*.elf`, its `<name>.dnd-addresses.json`, and either
    the published `<name>.dnd-debug.json` or native-bundle `dnd-il-debug.json`.
    The three artifact rows display the resolved filenames; the adapter validates
@@ -174,7 +174,7 @@ protocol fix; pulling the repository does not update an installed plugin.
 
 If Resume runs without hitting a breakpoint, open **Run → View Breakpoints** and
 check that it is under **DolphinDotNet C# line breakpoints**. A regular .NET line
-breakpoint is not sent to this adapter. Use **Run → Attach to DolphinDotNet…**, then add a
+breakpoint is not sent to this adapter. Use **Run → Attach to Nintendo GameCube…**, then add a
 fresh breakpoint on another executable line. Before each Resume the adapter prints
 the number of verified source breakpoints and native addresses. Rejected locations
 also appear in the console with their source path and reason; check the selected
