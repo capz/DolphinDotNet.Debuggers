@@ -48,7 +48,7 @@ class AdapterIntegrationTest {
             var trace = new StackTraceArguments(); trace.setThreadId(1);
             var frame = client.server.stackTrace(trace).get(5, TimeUnit.SECONDS).getStackFrames()[0];
             assertEquals("Program.Main", frame.getName()); assertEquals(11, frame.getLine());
-            assertEquals(path, frame.getSource().getPath());
+            assertEquals(Path.of(path), Path.of(frame.getSource().getPath()));
             var scopeArgs = new ScopesArguments(); scopeArgs.setFrameId(frame.getId());
             var scope = client.server.scopes(scopeArgs).get(5, TimeUnit.SECONDS).getScopes()[0];
             var variables = new VariablesArguments(); variables.setVariablesReference(scope.getVariablesReference());

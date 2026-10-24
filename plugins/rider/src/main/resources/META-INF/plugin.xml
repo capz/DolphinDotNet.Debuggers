@@ -12,8 +12,9 @@
     </extensions>
     <actions>
         <action id="DolphinDotNet.Attach" class="com.dolphindotnet.rider.AttachAction"
-                text="Attach to DolphinDotNet…" description="Attach Rider to a running Dolphin or GameCube debug build">
-            <add-to-group group-id="RunMenu" anchor="last"/>
+                text="Attach to Nintendo GameCube…" description="Attach Rider to a running Dolphin or GameCube debug build">
+            <add-to-group group-id="XDebugger.AttachGroup" anchor="after"
+                          relative-to-action="com.jetbrains.rider.debugger.actions.RiderAttachToRemoteProcessAction"/>
         </action>
     </actions>
 </idea-plugin>
