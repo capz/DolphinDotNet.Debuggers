@@ -1,6 +1,7 @@
 # DolphinDotNet Rider plugin
 
-**Run → Attach to DolphinDotNet…** opens the attach dialog directly. Choose the
+**Run → Attach to Nintendo GameCube…**, immediately below **Attach to Remote Process…**,
+opens the attach dialog directly. Choose the
 Debug build folder and a saved BBA/TCP or USB Gecko target, then click **Attach**.
 The dialog remembers its settings per project on this machine and reuses existing
 attach configuration defaults on first use when selected or unambiguous. Launch Dolphin/the device first.
