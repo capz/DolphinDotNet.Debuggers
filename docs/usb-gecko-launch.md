@@ -24,10 +24,13 @@ value, not a claim about USB FIFO speed.
 ## IDE settings
 
 In Rider's **Attach to DolphinDotNet** dialog or its saved attach configuration,
-select a **USB Gecko** target and enable **Upload ELF with Swiss, then attach**.
-The same checkbox is available in Visual Studio's **Attach to DolphinDotNet**
-dialog. It is off for existing configurations and unavailable for TCP targets.
+select a **USB Gecko** target and choose **Upload with Swiss (USB Gecko)** under
+**Start on device**. The same mode is available in Visual Studio's attach dialog.
+Existing configurations retain their mode; Swiss upload requires a USB target.
 Settings persist with the existing local preferences/run configuration.
+
+For BBA or an explicit receiver-readiness handshake, choose the separate
+[DolphinDotNet ELF launcher mode](console-launcher.md).
 
 The ELF discovered in the Debug build folder is the uploaded executable.
 Swiss supports ELF loading; using this file directly ties the uploaded bytes to

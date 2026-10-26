@@ -1,8 +1,11 @@
 # Visual Studio debugging
 
-For a console running Swiss, select USB Gecko and enable **Upload ELF with Swiss,
-then attach** in the attach dialog. See [USB Gecko launching](usb-gecko-launch.md)
+For a console running Swiss, select USB Gecko and choose **Upload with Swiss
+(USB Gecko)** under **Start on device**. See [USB Gecko launching](usb-gecko-launch.md)
 for build/receiver requirements, upload timeouts and troubleshooting.
+
+Our [native ELF launcher mode](console-launcher.md) supports BBA and USB Gecko,
+with **Check receiver readiness** in the configuration and a fresh launch handshake.
 
 Game/sample build commands below refer to the [SDK repository](https://github.com/capz/DolphinDotNet), which owns the samples. Plugin and adapter build commands run in this repository.
 

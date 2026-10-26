@@ -3,6 +3,12 @@
 This repository builds independently. Install .NET 8 and Python 3; Rider builds
 also need Java 25 and use the checked-in Gradle 9.1 wrapper. Visual Studio VSIX
 packaging needs Windows with Visual Studio/MSBuild and the VSSDK build tools.
+Both IDE packages also include the resident console launcher. Build and stage it
+first using Docker (or build with devkitPPC/libogc2 and omit `--build`):
+
+```sh
+python3 scripts/package_launcher.py --build
+```
 
 ```sh
 dotnet run --project tests/DebuggerTests -c Release
@@ -31,7 +37,12 @@ The main workflow runs DAP/RSP tests on Ubuntu 24.04, builds the Rider plugin
 on macOS with JetBrains Plugin Verifier, and builds/verifies the VSIX on Windows.
 Each packaging workflow can also be manually dispatched. PR runs retain Actions
 artifacts. Successful main builds publish a prerelease containing the ZIP and
-VSIX produced by that same run. Marketplace publication and signing remain
+VSIX produced by that same run, plus the bootable launcher DOL and standalone
+launcher ZIP. A pinned native job tests and builds the receiver once; both IDE
+packaging jobs consume that exact artifact. Archive checks require the DOL,
+instructions, license and a matching checksum manifest. Manually dispatched
+packaging workflows build their own native artifact first.
+Marketplace publication and signing remain
 separate release steps; do not publish to a marketplace merely to test packaging.
 
 Interactive IDE sessions and physical BBA/USB Gecko hardware require acceptance
@@ -63,3 +74,10 @@ removal PR pins the exact validated debugger commit, so the sources remain
 retrievable even before it is merged here. No history in the SDK repository was
 rewritten. Compiler metadata generation and native debugging support remain in
 the SDK repository; all IDE/DAP/RSP implementation lives here.
+
+The resident GameCube receiver was moved here from `capz/DolphinDotNet` at
+`eb38df3` (including the resident-return and verified-DOL fixes). Its sources,
+tests and workflow are maintained with the host protocol. The GPL license is
+retained and included with the binary. Shared DOL conversion/verification helpers
+were copied here so launcher builds require no SDK checkout. The SDK keeps its
+copies for game builds and points to this repository for the console launcher.

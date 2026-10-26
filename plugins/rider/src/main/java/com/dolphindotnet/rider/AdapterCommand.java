@@ -9,11 +9,20 @@ final class AdapterCommand {
         // The distribution places this JAR in <plugin>/lib and the adapter in
         // <plugin>/adapter. Use the public class-location API, not the internal
         // plugin registry, so this also follows custom IDE plugin directories.
-        var jar = PathManager.getJarForClass(AdapterCommand.class);
-        if (jar == null || !Files.isRegularFile(jar) || jar.getParent() == null || jar.getParent().getParent() == null)
-            throw new IllegalStateException("DolphinDotNet plugin JAR is unavailable.");
-        Path adapter = jar.getParent().getParent().resolve("adapter/DolphinDotNet.DebugAdapter.dll");
+        Path adapter = pluginDirectory().resolve("adapter/DolphinDotNet.DebugAdapter.dll");
         if (!Files.isRegularFile(adapter)) throw new IllegalStateException("The plugin package is missing its debug adapter.");
         return new GeneralCommandLine("dotnet", adapter.toString()).withParameters(arguments);
+    }
+    private static Path pluginDirectory() {
+        var jar = PathManager.getJarForClass(AdapterCommand.class);
+        if (jar == null || !Files.isRegularFile(jar) || jar.getParent() == null || jar.getParent().getParent() == null)
+            throw new IllegalStateException("DolphinDotNet plugin location is unavailable.");
+        return jar.getParent().getParent();
+    }
+    static Path launcherDirectory() {
+        var directory = pluginDirectory().resolve("launcher");
+        if (!Files.isRegularFile(directory.resolve("DolphinDotNet.Launcher.dol")))
+            throw new IllegalStateException("The plugin package is missing its console launcher.");
+        return directory;
     }
 }

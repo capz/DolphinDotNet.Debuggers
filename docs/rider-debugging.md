@@ -246,9 +246,12 @@ not the host attach profile. No target networking configuration is sent on attac
 
 ## Adapter contract
 
-To start an existing build on a console running Swiss, enable **Upload ELF with
-Swiss, then attach** for a USB Gecko target. See [USB Gecko launching](usb-gecko-launch.md)
+To start an existing build on a console running Swiss, select **Upload with Swiss
+(USB Gecko)** for a USB Gecko target. See [USB Gecko launching](usb-gecko-launch.md)
 for build/receiver requirements, timeout settings and the DAP `launch` contract.
+
+Our [native ELF launcher mode](console-launcher.md) supports BBA and USB Gecko,
+with **Check receiver readiness** in the configuration and a fresh launch handshake.
 
 The `.NET 8` adapter in `tools/DolphinDotNet.DebugAdapter` can also be used directly:
 
