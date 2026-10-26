@@ -3,6 +3,7 @@
 **/.gradle/
 **/.intellijPlatform/
 plugins/rider/build/
+tools/DolphinDotNet.Launcher/build/
 **/__pycache__/
 out/
 **/.idea/

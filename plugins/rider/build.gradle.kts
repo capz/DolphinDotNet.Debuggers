@@ -30,6 +30,17 @@ intellijPlatform {
     pluginVerification { ides { current() } }
 }
 val adapterOutput = layout.buildDirectory.dir("adapter")
+val launcherOutput = rootDir.resolve("../../out/launcher")
+val checkLauncher by tasks.registering {
+    inputs.dir(launcherOutput)
+    doLast {
+        for (name in listOf("DolphinDotNet.Launcher.dol", "README.md", "LICENSE", "build-info.json")) {
+            check(launcherOutput.resolve(name).isFile) {
+                "Missing bundled GameCube launcher; run python scripts/package_launcher.py --build from the repository root."
+            }
+        }
+    }
+}
 val publishAdapter by tasks.registering(Exec::class) {
     workingDir = rootDir.resolve("../..")
     commandLine("dotnet", "publish", "tools/DolphinDotNet.DebugAdapter", "-c", "Release", "--no-self-contained", "-o", adapterOutput.get().asFile.absolutePath)
@@ -38,8 +49,9 @@ val publishAdapter by tasks.registering(Exec::class) {
     outputs.dir(adapterOutput)
 }
 tasks.prepareSandbox {
-    dependsOn(publishAdapter)
+    dependsOn(publishAdapter, checkLauncher)
     from(adapterOutput) { into("${pluginName.get()}/adapter") }
+    from(launcherOutput) { into("${pluginName.get()}/launcher") }
 }
 
 tasks.test {

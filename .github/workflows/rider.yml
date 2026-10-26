@@ -1,6 +1,10 @@
 name: Rider plugin
 on:
   workflow_call:
+    inputs:
+      launcher-artifact:
+        type: string
+        default: ''
   workflow_dispatch:
 permissions:
   contents: read
@@ -8,12 +12,23 @@ concurrency:
   group: rider-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  launcher:
+    if: inputs.launcher-artifact == ''
+    uses: ./.github/workflows/launcher.yml
+    with:
+      artifact-name: DolphinDotNet-GameCube-launcher-rider
   package:
+    needs: launcher
+    if: ${{ !cancelled() && (needs.launcher.result == 'success' || (needs.launcher.result == 'skipped' && inputs.launcher-artifact != '')) }}
     name: Rider attach plugin
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.launcher-artifact || 'DolphinDotNet-GameCube-launcher-rider' }}
+          path: out/launcher
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
@@ -31,15 +46,12 @@ jobs:
         run: |
           python3 - <<'PYZIP'
           from pathlib import Path
-          from zipfile import ZipFile
+          import sys
+          sys.path.insert(0, 'scripts')
+          from verify_rider import verify
           packages = list(Path('plugins/rider/build/distributions').glob('*.zip'))
           assert len(packages) == 1, packages
-          with ZipFile(packages[0]) as archive:
-              names = archive.namelist()
-              for required in ['DolphinDotNet.DebugAdapter.dll', 'DolphinDotNet.DebugAdapter.deps.json',
-                               'DolphinDotNet.DebugAdapter.runtimeconfig.json', 'DolphinDotNet.Debugger.dll', 'System.IO.Ports.dll']:
-                  assert any(name.endswith('/adapter/' + required) for name in names), required
-              assert any('Ports.Native' in name for name in names), 'Missing serial native runtimes'
+          verify(packages[0])
           PYZIP
       - uses: actions/upload-artifact@v4
         with:

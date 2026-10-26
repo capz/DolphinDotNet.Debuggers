@@ -43,6 +43,7 @@ public final class AttachAction extends DumbAwareAction {
     private static void copy(AttachConfiguration source, AttachConfiguration target) {
         target.buildFolder = source.buildFolder; target.targetId = source.targetId;
         target.uploadWithSwiss = source.uploadWithSwiss; target.uploadTimeoutSeconds = source.uploadTimeoutSeconds; target.bootDelayMilliseconds = source.bootDelayMilliseconds;
+        target.useDolphinDotNetLauncher = source.useDolphinDotNetLauncher; target.launcherPort = source.launcherPort; target.readyTimeoutSeconds = source.readyTimeoutSeconds;
         target.sourceFileMap.clear(); target.sourceFileMap.putAll(source.sourceFileMap);
     }
 }

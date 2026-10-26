@@ -17,6 +17,9 @@ public sealed class AttachOptions
     public int BaudRate { get; set; } = 115200;
     public int TimeoutSeconds { get; set; } = 10;
     public bool UploadWithSwiss { get; set; }
+    public bool UseDolphinDotNetLauncher { get; set; }
+    public int LauncherPort { get; set; } = 4299;
+    public int ReadyTimeoutSeconds { get; set; } = 30;
     public int UploadTimeoutSeconds { get; set; } = 60;
     public int BootDelayMilliseconds { get; set; } = 1000;
     public string SourceFileMapJson { get; set; } = "{}";
@@ -63,6 +66,17 @@ public sealed class AttachOptions
             result["serialPort"] = SerialPort.Trim();result["baudRate"] = BaudRate;
         }
         else throw new ArgumentException("Choose TCP or USB Gecko.");
+        if (UseDolphinDotNetLauncher)
+        {
+            if (UploadWithSwiss) throw new ArgumentException("Choose one launcher mode.");
+            CreateLauncherProbe(); // Validate the receiver endpoint independently of the build.
+            if (Transport == "tcp" && LauncherPort == Port) throw new ArgumentException("The launcher upload port must differ from the application's GDB port.");
+            if (UploadTimeoutSeconds < 1 || UploadTimeoutSeconds > 60) throw new ArgumentException("Launcher upload timeout must be between 1 and 60 seconds.");
+            if (BootDelayMilliseconds < 0 || BootDelayMilliseconds > 30000) throw new ArgumentException("Boot delay must be between 0 and 30000 milliseconds.");
+            result["request"] = "launch";result["launcher"] = "dolphinDotNet";
+            result["launcherPort"] = LauncherPort;result["readyTimeoutSeconds"] = ReadyTimeoutSeconds;
+            result["uploadTimeoutSeconds"] = UploadTimeoutSeconds;result["bootDelayMilliseconds"] = BootDelayMilliseconds;
+        }
         if (UploadWithSwiss)
         {
             if (Transport != "usbGecko") throw new ArgumentException("Swiss upload requires a USB Gecko target.");
@@ -80,6 +94,26 @@ public sealed class AttachOptions
                 throw new ArgumentException("Live status needs this computer's unicast IPv4 address and a UDP port from 0 to 65535.");
             result["heartbeatHost"] = HeartbeatHost.Trim();result["heartbeatPort"] = HeartbeatPort;
         }
+        return result;
+    }
+
+    public JObject CreateLauncherProbe()
+    {
+        if (LauncherPort < 1 || LauncherPort > 65535) throw new ArgumentException("Launcher upload port must be between 1 and 65535.");
+        if (ReadyTimeoutSeconds < 1 || ReadyTimeoutSeconds > 120) throw new ArgumentException("Readiness wait must be between 1 and 120 seconds.");
+        var result = new JObject { ["transport"] = Transport, ["timeoutSeconds"] = 3,
+            ["launcherPort"] = LauncherPort, ["readyTimeoutSeconds"] = Math.Min(3,ReadyTimeoutSeconds) };
+        if (Transport == "tcp")
+        {
+            if (string.IsNullOrWhiteSpace(Host) || Port < 1 || Port > 65535) throw new ArgumentException("Specify a host and valid GDB port.");
+            result["host"] = Host.Trim();result["port"] = Port;
+        }
+        else if (Transport == "usbGecko")
+        {
+            if (string.IsNullOrWhiteSpace(SerialPort) || BaudRate <= 0) throw new ArgumentException("Specify a serial device and positive baud rate.");
+            result["serialPort"] = SerialPort.Trim();result["baudRate"] = BaudRate;
+        }
+        else throw new ArgumentException("Choose TCP or USB Gecko.");
         return result;
     }
 

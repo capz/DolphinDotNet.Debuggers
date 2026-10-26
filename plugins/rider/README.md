@@ -5,8 +5,10 @@ opens the attach dialog directly. Choose the
 Debug build folder and a saved BBA/TCP or USB Gecko target, then click **Attach**.
 The dialog remembers its settings per project on this machine and reuses existing
 attach configuration defaults on first use when selected or unambiguous. Launch Dolphin/the device first.
-For a USB Gecko target, **Upload ELF with Swiss, then attach** can instead send
+For a USB Gecko target, **Upload with Swiss (USB Gecko)** can instead send
 the selected Debug ELF to a console waiting in Swiss. See [USB Gecko launching](../../docs/usb-gecko-launch.md).
+**DolphinDotNet ELF launcher (BBA / USB Gecko)** adds receiver-readiness checks
+and acknowledged ELF execution through our console loader. See [setup](../../docs/console-launcher.md).
 
 C# gutter breakpoints recognize DolphinDotNet SDK projects without selecting an
 attach configuration. Existing attach configurations remain available for

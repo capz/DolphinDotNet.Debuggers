@@ -1,6 +1,10 @@
 name: Visual Studio VSIX
 on:
   workflow_call:
+    inputs:
+      launcher-artifact:
+        type: string
+        default: ''
   workflow_dispatch:
 permissions:
   contents: read
@@ -8,11 +12,22 @@ concurrency:
   group: vsix-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 jobs:
+  launcher:
+    if: inputs.launcher-artifact == ''
+    uses: ./.github/workflows/launcher.yml
+    with:
+      artifact-name: DolphinDotNet-GameCube-launcher-vsix
   package:
+    needs: launcher
+    if: ${{ !cancelled() && (needs.launcher.result == 'success' || (needs.launcher.result == 'skipped' && inputs.launcher-artifact != '')) }}
     runs-on: windows-2022
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.launcher-artifact || 'DolphinDotNet-GameCube-launcher-vsix' }}
+          path: out/launcher
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'

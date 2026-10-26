@@ -12,6 +12,7 @@
     <DeployExtension>false</DeployExtension>
     <CreateVsixContainer>true</CreateVsixContainer>
     <AdapterOutput>$(MSBuildProjectDirectory)/obj/adapter/</AdapterOutput>
+    <LauncherOutput>$(MSBuildProjectDirectory)/../../out/launcher/</LauncherOutput>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265" ExcludeAssets="runtime" />
@@ -28,9 +29,11 @@
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <Import Project="$(VSToolsPath)/VSSDK/Microsoft.VsSDK.targets" Condition="'$(CompileOnly)' != 'true'" />
   <Target Name="PublishDebugAdapter" BeforeTargets="BeforeBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('$(LauncherOutput)DolphinDotNet.Launcher.dol') Or !Exists('$(LauncherOutput)README.md') Or !Exists('$(LauncherOutput)LICENSE') Or !Exists('$(LauncherOutput)build-info.json')" Text="Build the bundled GameCube launcher first: python scripts/package_launcher.py --build" />
     <Exec Command="dotnet publish &quot;$(MSBuildProjectDirectory)/../../tools/DolphinDotNet.DebugAdapter/DolphinDotNet.DebugAdapter.csproj&quot; -c Release -r win-x64 --self-contained true -o &quot;$(AdapterOutput)&quot;" />
     <ItemGroup>
       <VSIXSourceItem Include="$(AdapterOutput)**/*"><VSIXSubPath>adapter/%(RecursiveDir)</VSIXSubPath></VSIXSourceItem>
+      <VSIXSourceItem Include="$(LauncherOutput)*"><VSIXSubPath>launcher/</VSIXSubPath></VSIXSourceItem>
     </ItemGroup>
   </Target>
 </Project>

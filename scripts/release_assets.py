@@ -2,9 +2,11 @@
 """Select only packages produced by this run; missing selected extensions fail release."""
 import argparse
 from pathlib import Path
+from zipfile import ZipFile, ZIP_DEFLATED
+from package_launcher import FILES, verify_bundle
 
 
-def collect_assets(samples=None, rider_dir=None, visual_studio_dir=None):
+def collect_assets(samples=None, rider_dir=None, visual_studio_dir=None, launcher_dir=None):
     assets = []
     if samples is not None:
         samples = Path(samples)
@@ -18,6 +20,14 @@ def collect_assets(samples=None, rider_dir=None, visual_studio_dir=None):
         if len(matches) != 1:
             raise ValueError(f'Expected exactly one {suffix} package in {directory}, found {len(matches)}')
         assets.extend(matches)
+    if launcher_dir is not None:
+        launcher = Path(launcher_dir)
+        verify_bundle(lambda name: (launcher / name).read_bytes())
+        bundle = launcher / 'DolphinDotNet.Launcher.zip'
+        with ZipFile(bundle, 'w', ZIP_DEFLATED) as archive:
+            for name in FILES:
+                archive.write(launcher / name, name)
+        assets.extend([launcher / FILES[0], bundle])
     if not assets:
         raise ValueError('At least one release asset is required')
     for path in assets:
@@ -35,9 +45,10 @@ if __name__ == '__main__':
     parser.add_argument('samples', type=Path, nargs='?')
     parser.add_argument('--rider-dir', type=Path)
     parser.add_argument('--visual-studio-dir', type=Path)
+    parser.add_argument('--launcher-dir', type=Path)
     args = parser.parse_args()
     try:
-        for path in collect_assets(args.samples, args.rider_dir, args.visual_studio_dir):
+        for path in collect_assets(args.samples, args.rider_dir, args.visual_studio_dir, args.launcher_dir):
             print(path)
     except ValueError as error:
         parser.exit(1, str(error) + '\n')

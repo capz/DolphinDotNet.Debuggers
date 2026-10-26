@@ -4,11 +4,13 @@ from pathlib import Path
 import sys
 from zipfile import ZipFile
 import xml.etree.ElementTree as ET
+from package_launcher import verify_bundle
 
 
 def verify(path):
     with ZipFile(path) as archive:
         names=set(archive.namelist())
+        verify_bundle(lambda name: archive.read('launcher/' + name))
         for required in ('extension.vsixmanifest','AdapterRegistration.pkgdef','DolphinDotNet.VisualStudio.dll',
                          'adapter/DolphinDotNet.DebugAdapter.exe','adapter/DolphinDotNet.DebugAdapter.dll',
                          'adapter/DolphinDotNet.DebugAdapter.runtimeconfig.json','adapter/DolphinDotNet.DebugAdapter.deps.json',

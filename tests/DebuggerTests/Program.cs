@@ -16,6 +16,7 @@ await TestChecksumsAndTimeoutsAsync();
 await TestQueuedPauseAsync();
 await TestDuplicatePauseRepliesAsync();
 await WiiloadTests.RunAsync();
+await LauncherTests.RunAsync();
 Console.WriteLine("DolphinDotNet GDB/RSP protocol tests passed.");
 
 static void Check(bool condition, string message)
