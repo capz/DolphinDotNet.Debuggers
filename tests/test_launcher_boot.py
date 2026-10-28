@@ -39,6 +39,7 @@ class BootLayoutTests(unittest.TestCase):
     def test_dol_overwrites_boot_parameters(self):
         elf, dol = fixture()
         struct.pack_into('>I', dol, 0x48, 0x80000000)
+        struct.pack_into('>I', dol, 0xe0, 0x80000000)
         with self.assertRaisesRegex(ValueError, 'low-memory'):
             check(elf, dol)
 
@@ -70,6 +71,13 @@ class BootLayoutTests(unittest.TestCase):
         elf, dol = fixture()
         dol[256] ^= 1
         with self.assertRaisesRegex(ValueError, 'bytes differ'):
+            check(elf, dol)
+
+    def test_excess_zero_padding_must_not_expand_load_memory(self):
+        elf, dol = fixture()
+        dol.extend(bytes(32))
+        struct.pack_into('>I', dol, 0x90, 64)
+        with self.assertRaisesRegex(ValueError, 'padding'):
             check(elf, dol)
 
 

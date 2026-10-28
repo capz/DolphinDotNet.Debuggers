@@ -6,8 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 
-from verify_dol_elf import inspect
-from verify_launcher_boot import check
+from verify_launcher_boot import check, check_dol
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / 'tools/DolphinDotNet.Launcher'
@@ -18,18 +17,21 @@ FILES = ('DolphinDotNet.Launcher.dol', 'README.md', 'LICENSE', 'build-info.json'
 def stage(output, source=LAUNCHER / 'build'):
     source, output = Path(source), Path(output)
     dol = source / FILES[0]
-    inspect((source / 'DolphinDotNet.Launcher.elf').read_bytes(), dol.read_bytes())
-    check((source / 'DolphinDotNet.Launcher.elf').read_bytes(), dol.read_bytes())
+    elf_image = (source / 'DolphinDotNet.Launcher.elf').read_bytes()
+    dol_image = dol.read_bytes()
+    check(elf_image, dol_image)
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     output.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(dol, output / dol.name)
+    # Stage and hash the exact snapshot that passed validation, even if a build
+    # replaces the source file while packaging is in progress.
+    (output / dol.name).write_bytes(dol_image)
     shutil.copy2(LAUNCHER / 'README.md', output / 'README.md')
     shutil.copy2(ROOT / 'LICENSE', output / 'LICENSE')
     (output / 'build-info.json').write_text(json.dumps(dict(
         repository='capz/DolphinDotNet.Debuggers', commit=commit, toolchain=IMAGE,
         protocol='DNDL v1 with COMMIT', resident=True, uploadPort=4299,
         network='DHCP', usbGeckoSlots=[0, 1], hardwareTested=False,
-        sha256=hashlib.sha256(dol.read_bytes()).hexdigest()), indent=2) + '\n', encoding='utf-8')
+        sha256=hashlib.sha256(dol_image).hexdigest()), indent=2) + '\n', encoding='utf-8')
     return output
 
 
@@ -43,8 +45,7 @@ def verify_bundle(read):
         raise ValueError('Unexpected launcher build manifest')
     if not payload['README.md'] or not payload['LICENSE']:
         raise ValueError('Missing launcher instructions/license')
-    from dol_sections import sections
-    sections(payload[FILES[0]], aligned=True)
+    check_dol(payload[FILES[0]])
 
 
 if __name__ == '__main__':
