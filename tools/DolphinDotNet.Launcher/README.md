@@ -20,6 +20,20 @@ Both Gecko slots are checked. One transfer is served at a time. The application
 must be built with a waiting GDB stub for the selected transport/EXI slot. It
 owns its network/GDB settings after handoff; the launcher does not rewrite them.
 
+During an upload, the footer shows a progress bar beside the logo, and the text
+console reports actual received bytes and percentage. A full bar means the
+complete binary arrived; checksum/layout validation and execution follow
+separately. Interrupted uploads retain their partial progress and report failure.
+Progress updates are bounded to roughly one per percent to keep rendering out
+of the transfer hot path.
+
+USB FIFO calls transfer bounded batches of up to 3,968 bytes under each EXI lock.
+The libogc retry count includes successful bytes: the earlier retry budget of one
+limited every call to a single byte, risking the 60-second session limit on large
+debug ELFs. Empty polls remain bounded and transport errors terminate the session
+instead of being retried until timeout. Replace the console DOL as well as
+updating the IDE plugin to obtain this receiver fix.
+
 ## Build and boot
 
 Both debugger plugins bundle the DOL, these instructions, the license and a

@@ -12,6 +12,7 @@ await TestRecursiveAndSameLineAsync();
 await TestSourceSteppingAsync();
 await TestSourceBreakpointsAsync();
 await TestTcpProtocolAsync();
+await LibogcRegisterTests.RunAsync();
 await TestChecksumsAndTimeoutsAsync();
 await TestQueuedPauseAsync();
 await TestDuplicatePauseRepliesAsync();

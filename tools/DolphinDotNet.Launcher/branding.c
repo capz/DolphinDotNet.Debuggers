@@ -3,7 +3,7 @@
 
 unsigned dnd_launcher_logo_footer(size_t width, size_t height) {
     if (width < DND_LOGO_WIDTH + 2 * DND_LOGO_MARGIN ||
-        height < DND_LOGO_HEIGHT + 3 * DND_LOGO_MARGIN + 16 || (width & 1)) return 0;
+        height < DND_LOGO_HEIGHT + DND_LOGO_MARGIN + 2 * DND_CONSOLE_MARGIN + 16 || (width & 1)) return 0;
     return DND_LOGO_HEIGHT + DND_LOGO_MARGIN;
 }
 
@@ -16,5 +16,27 @@ bool dnd_launcher_draw_logo(void *framebuffer, size_t width, size_t height, size
     for (unsigned row=0; row<DND_LOGO_HEIGHT; row++)
         memcpy((uint8_t *)framebuffer + (y+row)*stride + x*2,
                dnd_logo_pixels + row*DND_LOGO_WIDTH*2, DND_LOGO_WIDTH*2);
+    return true;
+}
+
+bool dnd_launcher_draw_progress(void *framebuffer, size_t width, size_t height,
+                                size_t stride, uint32_t received, uint32_t total) {
+    if (!framebuffer || !total || !dnd_launcher_logo_footer(width,height) ||
+        width < DND_LOGO_WIDTH + 3 * DND_LOGO_MARGIN + 64 ||
+        width > SIZE_MAX / 2 || stride < width * 2 || stride > SIZE_MAX / height) return false;
+    size_t bar_width=(width-DND_LOGO_WIDTH-3*DND_LOGO_MARGIN) & ~(size_t)1;
+    size_t filled=(size_t)((uint64_t)(received<total ? received : total)*(bar_width-4)/total);
+    size_t top=height-DND_LOGO_MARGIN-DND_PROGRESS_HEIGHT;
+    /* Monochrome YUV422 pairs match the logo: white fill, grey border, dark track. */
+    for (size_t row=0; row<DND_PROGRESS_HEIGHT; row++) {
+        uint8_t *destination=(uint8_t *)framebuffer+(top+row)*stride+DND_LOGO_MARGIN*2;
+        for (size_t column=0; column<bar_width; column+=2) {
+            bool border=row<2 || row>=DND_PROGRESS_HEIGHT-2 || column<2 || column>=bar_width-2;
+            uint8_t luma=border ? 160 : column-2<filled ? 235 : 40;
+            destination[0]=luma; destination[1]=128;
+            destination[2]=luma; destination[3]=128;
+            destination+=4;
+        }
+    }
     return true;
 }

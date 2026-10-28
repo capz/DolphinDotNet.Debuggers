@@ -28,6 +28,31 @@ static void check_frame(size_t height) {
         }
     for (size_t i=0; i<guard; i++)
         assert(storage[i]==0x5a && storage[guard+bytes+i]==0x5a);
+
+    uint8_t *before=malloc(bytes);
+    assert(before);
+    memcpy(before,frame,bytes);
+    size_t bar_left=DND_LOGO_MARGIN*2;
+    size_t bar_width=width-DND_LOGO_WIDTH-3*DND_LOGO_MARGIN;
+    size_t bar_top=height-DND_LOGO_MARGIN-DND_PROGRESS_HEIGHT;
+    assert(dnd_launcher_draw_progress(frame,width,height,stride,0,100));
+    for (size_t row=0; row<height; row++)
+        for (size_t column=0; column<stride; column++)
+            if (row<bar_top || row>=bar_top+DND_PROGRESS_HEIGHT ||
+                column<bar_left || column>=bar_left+bar_width*2)
+                assert(frame[row*stride+column]==before[row*stride+column]);
+    size_t inside=(bar_top+8)*stride+bar_left+4;
+    size_t end=inside+(bar_width-6)*2;
+    assert(frame[inside]==40 && frame[end]==40);
+    assert(dnd_launcher_draw_progress(frame,width,height,stride,50,100));
+    assert(frame[inside]==235 && frame[end]==40);
+    assert(dnd_launcher_draw_progress(frame,width,height,stride,100,100));
+    assert(frame[inside]==235 && frame[end]==235);
+    assert(dnd_launcher_draw_progress(frame,width,height,stride,101,100));
+    assert(frame[end]==235);
+    for (size_t i=0; i<guard; i++)
+        assert(storage[i]==0x5a && storage[guard+bytes+i]==0x5a);
+    free(before);
     free(storage);
 }
 
@@ -42,6 +67,9 @@ int main(void) {
     assert(!dnd_launcher_draw_logo(&byte,640,480,1279));
     assert(!dnd_launcher_draw_logo(&byte,640,480,SIZE_MAX));
     assert(!dnd_launcher_draw_logo(&byte,SIZE_MAX-1,480,SIZE_MAX));
+    assert(!dnd_launcher_draw_progress(&byte,640,480,1280,0,0));
+    assert(!dnd_launcher_draw_progress(&byte,400,480,1280,50,100));
+    assert(!dnd_launcher_draw_progress(&byte,640,480,SIZE_MAX,50,100));
     assert(byte==0x5a);
     puts("Logo placement: NTSC/PAL footer, padded stride, untouched text/borders and invalid surfaces passed.");
     return 0;

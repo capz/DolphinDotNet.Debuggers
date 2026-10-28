@@ -195,11 +195,15 @@ class ConsoleLauncherTests(unittest.TestCase):
         output = [e.get('body', {}).get('output', '') for e in self.client.events]
         self.assertTrue(any('READY TO RECEIVE ELF' in s for s in output))
         self.assertTrue(any('acknowledged execution' in s for s in output))
+        self.assertTrue(any('Upload [' in s and '0%' in s for s in output))
+        self.assertTrue(any('Upload [' in s and '100%' in s for s in output))
         self.client.request('setBreakpoints', dict(source=dict(path='/build/日本/Game.cs'), breakpoints=[dict(line=11)]))
         self.client.request('configurationDone')
         self.client.event('stopped')
         self.client.request('continue', dict(threadId=1))
         self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+        trace = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertEqual(11, trace[0]['line'])
         self.client.request('disconnect')
         self.client.event('terminated')
 
@@ -213,6 +217,14 @@ class ConsoleLauncherTests(unittest.TestCase):
 
     def test_bba_ready_upload_validated_execution_then_gdb(self):
         self.tcp_launch()
+
+    def test_upload_then_libogc_bulk_register_debug_session(self):
+        self.receiver = Receiver(self.elf.read_bytes())
+        self.target = Target()
+        self.target.bulk_registers = True
+        self.client.request('launch', self.arguments(launcherPort=self.receiver.port, port=self.target.port))
+        self.complete_debug_session()
+        self.assertIn('g', self.target.commands)
 
     @unittest.skipUnless(os.environ.get('DND_NATIVE_LAUNCHER_COMMAND'), 'Optional production C receiver integration')
     def test_production_c_receiver_then_gdb(self):

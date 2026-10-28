@@ -43,7 +43,14 @@ internal sealed record ConsoleLauncher(byte[] Image, LauncherEndpoint Endpoint, 
         await using (var receiver = await LauncherClient.WaitForReadyAsync(Endpoint, ReadyTimeout, token))
         {
             await status($"Console READY TO RECEIVE ELF (limit {receiver.MaximumImageBytes} bytes). Uploading {Image.Length} bytes.\n");
-            await receiver.UploadAndExecuteAsync(Image, UploadTimeout, cancellationToken: token);
+            await receiver.UploadAndExecuteAsync(Image, UploadTimeout, cancellationToken: token,
+                progress: (sent, total) =>
+                {
+                    var percent = (int)((long)sent * 100 / total);
+                    var filled = percent / 5;
+                    var bar = new string('#', filled) + new string('.', 20 - filled);
+                    return status($"Upload [{bar}] {percent}% ({sent} / {total} bytes sent).\n");
+                });
             await status("Console validated the ELF and acknowledged execution. Connecting to the application's GDB stub.\n");
         }
         await Task.Delay(BootDelayMilliseconds, token);

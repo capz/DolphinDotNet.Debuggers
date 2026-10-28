@@ -19,6 +19,8 @@ typedef struct {
     uint8_t input[1024], output[128], image[512];
     size_t length, position, written, limit;
     unsigned allocations, states, fail_write;
+    unsigned rejection, progress_calls;
+    uint32_t received, total;
 } Peer;
 static int rd(void *context, void *buffer, size_t size) {
     Peer *p=context;
@@ -38,7 +40,17 @@ static uint8_t *alloc(void *context, size_t size, uintptr_t *address, size_t *ex
     *address=0x81700000; *extent=0x10000;
     return size<=p->limit ? p->image : NULL;
 }
-static void state(void *context, unsigned n) { ((Peer *)context)->states |= 1u<<n; }
+static void state(void *context, unsigned n) {
+    Peer *p=context;
+    if (n>=DND_STATUS_REJECTED) p->rejection=n-DND_STATUS_REJECTED;
+    else p->states |= 1u<<n;
+}
+static void progress(void *context, uint32_t received, uint32_t total) {
+    Peer *p=context;
+    assert(total==256 && received<=total);
+    assert(!p->progress_calls ? received==0 : received>p->received && p->total==total);
+    p->progress_calls++; p->received=received; p->total=total;
+}
 static void frame(uint8_t *p, unsigned kind, uint32_t value, uint32_t detail) {
     memcpy(p,"DNDL\0\1\0",7); p[7]=(uint8_t)kind; put32(p+8,value); put32(p+12,detail);
 }
@@ -50,7 +62,7 @@ static void prepare(Peer *p, unsigned last) {
     frame(p->input+288,last,0x12345678,0); frame(p->input+304,DND_COMMIT,0x12345678,0); p->length=320;
 }
 static int session(Peer *peer) {
-    DndLauncherIo io={peer,rd,wr,alloc,state,512};
+    DndLauncherIo io={peer,rd,wr,alloc,state,512,progress};
     DndElfPlan plan; uint8_t *image=NULL;
     int r=dnd_launcher_session(&io,&image,&plan);
     assert((image!=NULL)==(r==1));
@@ -86,6 +98,7 @@ int main(void) {
     assert(!dnd_elf_validate(elf,256,0x81400000,0x10000,&plan)); /* Resident code/image. */
     Peer p;
     prepare(&p,DND_EXECUTE); assert(session(&p)==1 && p.written==48);
+    assert(p.received==256 && p.total==256 && p.progress_calls>2 && p.progress_calls<=102);
     assert(p.output[7]==DND_READY && be32(p.output+8)==0x12345678 && be32(p.output+12)==512);
     assert(p.output[23]==DND_ACCEPTED && p.output[39]==DND_EXECUTING);
     assert(p.states==((1u<<DND_READY)|(1u<<DND_UPLOAD)|(1u<<DND_ACCEPTED)|(1u<<DND_EXECUTING)));
@@ -94,6 +107,7 @@ int main(void) {
     assert(session(&p)==0 && !p.allocations && p.written==16);
     prepare(&p,DND_EXECUTE); p.input[32]^=1;
     assert(session(&p)==-1 && p.output[23]==DND_ERROR && be32(p.output+24)==DND_BAD_CRC);
+    assert(p.rejection==DND_BAD_CRC && p.received==256);
     prepare(&p,DND_EXECUTE); p.input[32]=0;
     put32(p.input+28,dnd_launcher_crc32(p.input+32,256));
     assert(session(&p)==-1 && be32(p.output+24)==DND_BAD_ELF);
@@ -110,7 +124,10 @@ int main(void) {
     prepare(&p,DND_EXECUTE); p.fail_write=32; assert(session(&p)==-1); /* Cannot ACK execution. */
     prepare(&p,DND_EXECUTE); frame(p.input+304,DND_CANCEL,0x12345678,0); assert(session(&p)==0);
     prepare(&p,DND_EXECUTE); frame(p.input+304,DND_COMMIT,0x87654321,0); assert(session(&p)==-1);
-    for (size_t i=0; i<320; i++) { prepare(&p,DND_EXECUTE); p.length=i; assert(session(&p)!=1); }
+    for (size_t i=0; i<320; i++) {
+        prepare(&p,DND_EXECUTE); p.length=i; assert(session(&p)!=1);
+        if (i<288) assert(p.received<256); /* Interrupted input never reports completion. */
+    }
     puts("ELF validation, staging protection, CRC32, readiness, short I/O, cancellation and execution gate passed.");
     return 0;
 }

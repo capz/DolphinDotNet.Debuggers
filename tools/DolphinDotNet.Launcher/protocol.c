@@ -21,7 +21,27 @@ static bool send(DndLauncherIo *io, unsigned kind, uint32_t value, uint32_t deta
     put32(h+8,value); put32(h+12,detail);
     return exact(io,h,sizeof(h),true);
 }
-static int reject(DndLauncherIo *io, unsigned code) { send(io,DND_ERROR,code,0); return -1; }
+static int reject(DndLauncherIo *io, unsigned code) {
+    if (io->status) io->status(io->context,DND_STATUS_REJECTED+code);
+    send(io,DND_ERROR,code,0);
+    return -1;
+}
+static bool receive_image(DndLauncherIo *io, uint8_t *buffer, uint32_t length) {
+    uint32_t received=0, last_report=0, interval=(length+99)/100;
+    if (io->progress) io->progress(io->context,0,length);
+    while (received<length) {
+        size_t chunk=length-received;
+        if (chunk>3968) chunk=3968;
+        int n=io->read(io->context,buffer+received,chunk);
+        if (n<=0 || (size_t)n>chunk) return false;
+        received+=(uint32_t)n;
+        if (received==length || received-last_report>=interval) {
+            if (io->progress) io->progress(io->context,received,length);
+            last_report=received;
+        }
+    }
+    return true;
+}
 int dnd_launcher_session(DndLauncherIo *io, uint8_t **image, DndElfPlan *plan) {
     uint8_t h[16];
     *image=NULL;
@@ -40,7 +60,7 @@ int dnd_launcher_session(DndLauncherIo *io, uint8_t **image, DndElfPlan *plan) {
     uint8_t *buffer=io->allocate(io->context,length,&stage,&stage_size);
     if (!buffer) return reject(io,DND_NO_MEMORY);
     if (io->status) io->status(io->context,DND_UPLOAD);
-    if (!exact(io,buffer,length,false)) return -1;
+    if (!receive_image(io,buffer,length)) return -1;
     if (dnd_launcher_crc32(buffer,length)!=crc) return reject(io,DND_BAD_CRC);
     if (!dnd_elf_validate(buffer,length,stage,stage_size,plan)) return reject(io,DND_BAD_ELF);
     if (!send(io,DND_ACCEPTED,length,crc)) return -1;

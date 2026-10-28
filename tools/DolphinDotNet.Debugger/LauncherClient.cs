@@ -76,15 +76,29 @@ public static class LauncherProtocol
         => SendAsync(stream, Cancel, nonce, 0, token);
 
     public static async Task UploadAndExecuteAsync(Stream stream, uint nonce, uint maximumImageBytes,
-        ReadOnlyMemory<byte> image, Action<string>? status = null, CancellationToken token = default)
+        ReadOnlyMemory<byte> image, Action<string>? status = null, CancellationToken token = default,
+        Func<int, int, Task>? progress = null)
     {
         if (image.Length < 52 || image.Length > maximumImageBytes || image.Length > MaximumImageBytes)
             throw new ArgumentException("ELF does not fit the ready receiver's advertised image limit.", nameof(image));
         var crc = Crc32(image.Span);
         await SendAsync(stream, Upload, (uint)image.Length, crc, token).ConfigureAwait(false);
+        if (progress is not null) await progress(0, image.Length).ConfigureAwait(false);
+        var lastStep = 0;
         for (var offset = 0; offset < image.Length; offset += 3968)
-            await stream.WriteAsync(image.Slice(offset, Math.Min(3968, image.Length - offset)), token).AsTask().WaitAsync(token).ConfigureAwait(false);
+        {
+            var count = Math.Min(3968, image.Length - offset);
+            await stream.WriteAsync(image.Slice(offset, count), token).AsTask().WaitAsync(token).ConfigureAwait(false);
+            var sent = offset + count;
+            var step = (int)((long)sent * 20 / image.Length);
+            if (progress is not null && sent < image.Length && step > lastStep)
+            {
+                await progress(sent, image.Length).ConfigureAwait(false);
+                lastStep = step;
+            }
+        }
         await stream.FlushAsync(token).WaitAsync(token).ConfigureAwait(false);
+        if (progress is not null) await progress(image.Length, image.Length).ConfigureAwait(false);
         var accepted = await ReceiveAsync(stream, Accepted, token).ConfigureAwait(false);
         if (accepted.Value != image.Length || accepted.Detail != crc)
             throw new InvalidDataException("The receiver acknowledged a different ELF. Execution was not requested.");
@@ -164,14 +178,22 @@ public sealed class LauncherClient : IAsyncDisposable
         }
     }
     public async Task UploadAndExecuteAsync(ReadOnlyMemory<byte> image, TimeSpan timeout,
-        Action<string>? status = null, CancellationToken cancellationToken = default)
+        Action<string>? status = null, CancellationToken cancellationToken = default,
+        Func<int, int, Task>? progress = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_committed) throw new InvalidOperationException("This launcher session has already been used.");
+        if (timeout <= TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(timeout));
         _committed = true; // A partial upload must never be retried on this session.
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(timeout);
-        try { await LauncherProtocol.UploadAndExecuteAsync(_stream, _nonce, MaximumImageBytes, image, status, deadline.Token).ConfigureAwait(false); }
+        try
+        {
+            if (_owner is SerialPort serial)
+                serial.ReadTimeout = serial.WriteTimeout = (int)Math.Ceiling(timeout.TotalMilliseconds);
+            await LauncherProtocol.UploadAndExecuteAsync(_stream, _nonce, MaximumImageBytes, image, status, deadline.Token, progress).ConfigureAwait(false);
+        }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw new TimeoutException("Launcher transfer/execution acknowledgement timed out. Return to the launcher before retrying."); }
     }

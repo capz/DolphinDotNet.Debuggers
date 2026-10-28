@@ -11,7 +11,7 @@ TARGET := build/DolphinDotNet.Launcher
 PYTHON ?= python3
 CFLAGS := $(MACHDEP) -O2 -g -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -I$(LIBOGC_INC) -D_DEFAULT_SOURCE
 CPPFLAGS := -DDND_LAUNCHER_PORT=$(PORT) -DDND_LAUNCHER_IP='"$(IP)"' -DDND_LAUNCHER_MASK='"$(NETMASK)"' -DDND_LAUNCHER_GATEWAY='"$(GATEWAY)"'
-OBJECTS := build/gamecube.o build/elf.o build/protocol.o build/branding.o build/logo.o build/trampoline.o
+OBJECTS := build/gamecube.o build/elf.o build/protocol.o build/branding.o build/logo.o build/usb_transport.o build/trampoline.o
 .PHONY: all clean test
 all: $(TARGET).dol
 build:

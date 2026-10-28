@@ -9,9 +9,10 @@ from PIL import Image
 
 
 def convert(source):
-    image = Image.open(source).convert('RGBA')
-    if image.size != (300, 200):
-        raise ValueError('launcher logo must be 300x200 pixels')
+    with Image.open(source) as original:
+        if original.size != (300, 200):
+            raise ValueError('launcher logo must be 300x200 pixels')
+        image = original.convert('RGBA')
     background = Image.new('RGBA', image.size, (0, 0, 0, 255))
     pixels = Image.alpha_composite(background, image).convert('RGB').tobytes()
     output = bytearray()

@@ -43,6 +43,8 @@ class Target:
         self.duplicate_interrupt_stop = False
         self.delayed_interrupt_stop = None
         self.empty_register = False
+        self.bulk_registers = False
+        self.expected_disconnect = False
         self.step_reply = None
         self.step_destinations = {}
         self.step_stack_pointers = {}
@@ -104,6 +106,16 @@ class Target:
                     self.commands.append(command)
                     if command == "?":
                         self.reply(f"T0540:{self.pc:08x};")
+                    elif command.startswith('p') and self.bulk_registers:
+                        self.reply('')
+                    elif command == 'g' and self.empty_register:
+                        self.reply('')
+                    elif command == 'g' and self.bulk_registers:
+                        registers = bytearray(412)
+                        struct.pack_into('>I', registers, 4, self.stack_pointer)
+                        struct.pack_into('>I', registers, 12, 42)
+                        struct.pack_into('>I', registers, 384, self.pc)
+                        self.reply(registers.hex())
                     elif command.startswith("Z0,"):
                         self.breakpoints.add(int(command.split(",")[1], 16))
                         self.reply("OK")
@@ -173,7 +185,8 @@ class Target:
                     else:
                         raise AssertionError(command)
         except Exception as error:
-            self.errors.append(error)
+            if not (self.expected_disconnect and isinstance(error, (ConnectionResetError, ConnectionAbortedError))):
+                self.errors.append(error)
         finally:
             self.listener.close()
 
@@ -396,6 +409,7 @@ class AdapterTests(unittest.TestCase):
             udp.settimeout(.2)
             udp.sendto(ping, endpoint)
             self.assertEqual(20, len(udp.recvfrom(64)[0]))
+            self.target.expected_disconnect = True
             self.client.process.kill(); self.client.process.wait(timeout=3)
             self.assertEqual(1, struct.unpack('>I', self.target.memory[0x80009000][4:])[0])
             udp.sendto(ping, endpoint)
@@ -412,6 +426,7 @@ class AdapterTests(unittest.TestCase):
             self.client.request('pause', dict(threadId=1)); self.client.event('stopped')
             payload = b'T0540:80004004;'
             self.target.peer.sendall(b'$'+payload+f'#{sum(payload)&255:02x}'.encode())
+            self.target.expected_disconnect = True
             self.target.peer.shutdown(socket.SHUT_RDWR)
             self.target.thread.join(timeout=2)
             udp.sendto(ping, endpoint)
@@ -437,6 +452,8 @@ class AdapterTests(unittest.TestCase):
         target = self.heartbeat_target()
         target.memory[0x80009100] = bytes.fromhex('444e4842') + bytes.fromhex('01010101')*5
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as occupied:
+            if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+                occupied.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
             occupied.bind(('0.0.0.0', 0))
             self.attach(target=target, heartbeat=dict(heartbeatHost='127.0.0.1', heartbeatPort=occupied.getsockname()[1]))
         self.assertIn('Live debugger status unavailable', self.client.event('output')['output'])
@@ -522,6 +539,26 @@ class AdapterTests(unittest.TestCase):
         self.bp(lines=(11,))
         self.client.request('continue', dict(threadId=1))
         self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+
+    def test_libogc_bulk_register_fallback_after_unsupported_telemetry(self):
+        target = self.telemetry_target(refused=True)
+        target.bulk_registers = True
+        self.attach(target=target)
+        self.assertIn('Debugger overlay status unavailable', self.client.event('output')['output'])
+        self.assertTrue(self.bp(lines=(11,))[0]['verified'])
+        self.client.request('continue', dict(threadId=1))
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+        frames = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertEqual(11, frames[0]['line'])
+        self.client.request('next', dict(threadId=1))
+        self.client.event('stopped')
+        frames = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames']
+        self.assertEqual(12, frames[0]['line'])
+        self.assertEqual(1, target.commands.count('p1'))
+        self.assertIn('g', target.commands)
+        self.client.request('disconnect')
+        self.client.event('terminated')
+        self.assertFalse(target.breakpoints)
 
     def test_overlay_telemetry_acknowledged_but_ignored_write_is_unavailable(self):
         target = self.telemetry_target()
@@ -765,14 +802,14 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
         self.assertEqual(11, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
 
-    def test_empty_register_reply_after_command_ack_is_still_an_error(self):
+    def test_unsupported_single_and_bulk_register_reads_fail_cleanly(self):
         self.attach()
         self.client.request('continue', dict(threadId=1))
         self.client.request('pause', dict(threadId=1))
         self.client.event('stopped')
         self.target.empty_register = True
         result = self.client.request('stackTrace', dict(threadId=1), success=False)
-        self.assertIn('Invalid register response', result['message'])
+        self.assertIn('Invalid PowerPC bulk register packet', result['message'])
         self.client.event('terminated')
         self.client.request('threads', success=False)
 
@@ -1298,7 +1335,7 @@ Game.cs - 0x80004028
         frame = self.client.request("stackTrace", dict(threadId=1))["body"]["stackFrames"][0]
         self.assertEqual(frame["line"], 10)
         self.assertEqual(frame["column"], 0)
-        self.assertEqual(frame["source"]["path"], "file:///local/%E6%97%A5%E6%9C%AC/Game.cs")
+        self.assertEqual(frame["source"]["path"], Path("/local/\u65e5\u672c/Game.cs").resolve().as_uri())
 
     def test_duplicate_length_header_rejected(self):
         self.client.process.stdin.write(b"Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}")

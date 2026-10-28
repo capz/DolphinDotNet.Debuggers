@@ -1,6 +1,7 @@
 #include "protocol.h"
 #include "resident.h"
 #include "branding.h"
+#include "usb_transport.h"
 #include <gccore.h>
 #include <network.h>
 #include <ogc/usbgecko.h>
@@ -25,12 +26,14 @@ typedef struct {
     _Alignas(32) uint8_t stub[512];
     _Alignas(32) uint8_t image[];
 } Stage;
-typedef struct { int socket, channel; uint64_t deadline; Stage *stage; } Connection;
+typedef struct { int socket, channel; uint64_t deadline; Stage *stage; unsigned percent; bool timed_out; } Connection;
 static uint8_t *reservation;
 static uintptr_t reservation_end;
 static volatile int listener=-2;
 static char local_ip[16], netmask[16], gateway[16];
 static _Alignas(32) uint8_t network_stack[32768];
+static void *display_framebuffer;
+static GXRModeObj *display_mode;
 extern const uint8_t dnd_launcher_stub_start[], dnd_launcher_stub_end[];
 _Static_assert(sizeof(DndElfSegment)==16 && offsetof(DndElfPlan,segments)==8, "ELF trampoline ABI");
 
@@ -44,11 +47,14 @@ static int transfer(Connection *c, void *buffer, size_t size, bool sending) {
             if (error!=EAGAIN && error!=EWOULDBLOCK && error!=EINTR) return -1;
         } else {
             if (!usb_isgeckoalive(c->channel)) return -1;
-            n=sending ? usb_sendbuffer_safe_ex(c->channel,buffer,(int)size,1)
-                      : usb_recvbuffer_safe_ex(c->channel,buffer,(int)size,1);
-            if (n>0) return n;
+            n=dnd_launcher_usb_poll(c->channel,buffer,size,sending);
+            if (n!=0) return n;
         }
         usleep(1000);
+    }
+    if (!c->timed_out) {
+        printf("\nUpload session exceeded the receiver's 60-second deadline.\n");
+        c->timed_out=true;
     }
     return -1;
 }
@@ -68,11 +74,27 @@ static void status(void *p, unsigned state) {
     else if (state==DND_UPLOAD) printf("Receiving ELF...\n");
     else if (state==DND_ACCEPTED) printf("ELF validated. Waiting for IDE execute request.\n");
     else if (state==DND_EXECUTING) printf("Execution acknowledged. Starting application.\n");
+    else if (state==DND_STATUS_REJECTED+DND_BAD_REQUEST) printf("\nRejected: invalid upload request.\n");
+    else if (state==DND_STATUS_REJECTED+DND_TOO_LARGE) printf("\nRejected: executable exceeds upload limits.\n");
+    else if (state==DND_STATUS_REJECTED+DND_BAD_CRC) printf("\nRejected: binary checksum mismatch.\n");
+    else if (state==DND_STATUS_REJECTED+DND_BAD_ELF) printf("\nRejected: unsupported executable or staging-memory overlap.\n");
+    else if (state==DND_STATUS_REJECTED+DND_NO_MEMORY) printf("\nRejected: upload staging memory unavailable.\n");
+    fflush(stdout);
+}
+static void upload_progress(void *p, uint32_t received, uint32_t total) {
+    Connection *c=p;
+    unsigned percent=(unsigned)((uint64_t)received*100/total);
+    if (received && percent==c->percent) return;
+    c->percent=percent;
+    dnd_launcher_draw_progress(display_framebuffer,display_mode->fbWidth,display_mode->xfbHeight,
+                              display_mode->fbWidth*VI_DISPLAY_PIX_SZ,received,total);
+    printf("\rReceived %u%% (%lu / %lu bytes)",percent,(unsigned long)received,(unsigned long)total);
+    if (received==total) printf("\nChecking checksum and executable layout...\n");
     fflush(stdout);
 }
 static void serve(Connection c) {
     c.deadline=gettime()+secs_to_ticks(60);
-    DndLauncherIo io={&c,receive,transmit,allocate_image,status,DND_LAUNCHER_MAX_IMAGE};
+    DndLauncherIo io={&c,receive,transmit,allocate_image,status,DND_LAUNCHER_MAX_IMAGE,upload_progress};
     DndElfPlan plan;
     uint8_t *image=NULL;
     int result=dnd_launcher_session(&io,&image,&plan);
@@ -102,7 +124,7 @@ static void serve(Connection c) {
         __builtin_unreachable();
     }
     if (c.socket<0) usb_flush(c.channel);
-    printf(result==0 ? "Readiness check complete. Waiting for executable.\n" : "Transfer rejected or disconnected. Waiting for a new handshake.\n");
+    printf(result==0 ? "Readiness check complete. Waiting for executable.\n" : "\nTransfer rejected or disconnected. Waiting for a new handshake.\n");
 }
 static void *start_network(void *unused) {
     (void)unused;
@@ -130,9 +152,12 @@ int main(void) {
     VIDEO_Init(); PAD_Init();
     GXRModeObj *mode=VIDEO_GetPreferredMode(NULL);
     void *framebuffer=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));
+    display_framebuffer=framebuffer; display_mode=mode;
     VIDEO_ClearFrameBuffer(mode,framebuffer,COLOR_BLACK);
     unsigned footer=dnd_launcher_logo_footer(mode->fbWidth,mode->xfbHeight);
-    console_init(framebuffer,20,20,mode->fbWidth-40,mode->xfbHeight-40-footer,mode->fbWidth*VI_DISPLAY_PIX_SZ);
+    console_init(framebuffer,DND_CONSOLE_MARGIN,DND_CONSOLE_MARGIN,
+                 mode->fbWidth-2*DND_CONSOLE_MARGIN,mode->xfbHeight-2*DND_CONSOLE_MARGIN-footer,
+                 mode->fbWidth*VI_DISPLAY_PIX_SZ);
     dnd_launcher_draw_logo(framebuffer,mode->fbWidth,mode->xfbHeight,mode->fbWidth*VI_DISPLAY_PIX_SZ);
     VIDEO_Configure(mode); VIDEO_SetNextFramebuffer(framebuffer); VIDEO_SetBlack(false); VIDEO_Flush(); VIDEO_WaitVSync();
     printf("DolphinDotNet ELF Launcher v1 (resident return enabled)\n\n");
