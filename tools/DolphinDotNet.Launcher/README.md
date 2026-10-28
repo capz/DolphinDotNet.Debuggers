@@ -6,6 +6,12 @@ by DolphinDotNet. It does not require Swiss to remain running, a desktop CLR on
 the console, wiiload, zlib, a filesystem, or the managed runtime.
 
 Boot `DolphinDotNet.Launcher.dol` once using your existing homebrew boot method.
+Keep the bundled `DolphinDotNet.Launcher.png` beside it to show the supplied cube
+logo as its icon in Dolphin's game list. If you rename the DOL, rename the PNG
+to the same basename. This sidecar image is separate from the logo drawn by the
+running launcher; DOL files do not contain Windows executable icon resources.
+The naming convention follows Dolphin's
+[custom banner loading](https://github.com/dolphin-emu/dolphin/blob/master/Source/Core/UICommon/GameFile.cpp).
 Leave it running while developing. In either debugger plugin choose
 **DolphinDotNet ELF launcher (BBA / USB Gecko)**, select the Debug build folder
 and target, and choose **Check receiver readiness**. The check exchanges no
