@@ -195,8 +195,8 @@ class ConsoleLauncherTests(unittest.TestCase):
         output = [e.get('body', {}).get('output', '') for e in self.client.events]
         self.assertTrue(any('READY TO RECEIVE ELF' in s for s in output))
         self.assertTrue(any('acknowledged execution' in s for s in output))
-        self.assertTrue(any('Upload [' in s and '0%' in s for s in output))
-        self.assertTrue(any('Upload [' in s and '100%' in s for s in output))
+        self.assertTrue(any('Upload [' in s and '] 0% (' in s for s in output))
+        self.assertTrue(any('Upload [' in s and '] 100% (' in s for s in output))
         self.client.request('setBreakpoints', dict(source=dict(path='/build/日本/Game.cs'), breakpoints=[dict(line=11)]))
         self.client.request('configurationDone')
         self.client.event('stopped')

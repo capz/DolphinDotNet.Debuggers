@@ -40,8 +40,8 @@ class AdapterIntegrationTest {
             @SuppressWarnings("unchecked") Map<String, Object> arguments = gson.fromJson(readLine(reader), Map.class);
             client.start(arguments).get(10, TimeUnit.SECONDS);
             if (consoleLauncher) {
-                assertTrue(output.stream().anyMatch(line -> line.contains("Upload [") && line.contains("0%")));
-                assertTrue(output.stream().anyMatch(line -> line.contains("Upload [") && line.contains("100%")));
+                assertTrue(output.stream().anyMatch(line -> line.contains("Upload [") && line.contains("] 0% (")));
+                assertTrue(output.stream().anyMatch(line -> line.contains("Upload [") && line.contains("] 100% (")));
                 assertTrue(output.stream().anyMatch(line -> line.contains("acknowledged execution")));
             }
             var path = root.resolve("build with spaces 日本/日本/Game.cs").toString();

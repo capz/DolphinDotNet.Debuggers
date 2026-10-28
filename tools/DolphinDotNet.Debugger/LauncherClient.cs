@@ -193,6 +193,12 @@ public sealed class LauncherClient : IAsyncDisposable
             if (_owner is SerialPort serial)
                 serial.ReadTimeout = serial.WriteTimeout = (int)Math.Ceiling(timeout.TotalMilliseconds);
             await LauncherProtocol.UploadAndExecuteAsync(_stream, _nonce, MaximumImageBytes, image, status, deadline.Token, progress).ConfigureAwait(false);
+            // The final COMMIT has no reply. Keep the upload port alive until the
+            // driver's output queue drains before reopening the same device for GDB.
+            if (_owner is SerialPort uploadPort)
+                while (uploadPort.BytesToWrite != 0)
+                    await Task.Delay(10, deadline.Token).ConfigureAwait(false);
+            deadline.Token.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw new TimeoutException("Launcher transfer/execution acknowledgement timed out. Return to the launcher before retrying."); }

@@ -50,6 +50,10 @@ static void check_frame(size_t height) {
     assert(frame[inside]==235 && frame[end]==235);
     assert(dnd_launcher_draw_progress(frame,width,height,stride,101,100));
     assert(frame[end]==235);
+    assert(dnd_launcher_draw_progress(frame,width,height,stride,UINT32_MAX,UINT32_MAX));
+    assert(frame[inside]==235 && frame[end]==235);
+    assert(dnd_launcher_draw_progress(frame,width,height,stride,0,UINT32_MAX));
+    assert(frame[inside]==40 && frame[end]==40);
     for (size_t i=0; i<guard; i++)
         assert(storage[i]==0x5a && storage[guard+bytes+i]==0x5a);
     free(before);

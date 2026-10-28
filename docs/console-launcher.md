@@ -48,6 +48,8 @@ single-byte USB polling that could make large ELF transfers exceed its deadline;
 upgrading the plugin alone cannot change a DOL already running on the console.
 USB driver read/write timeouts switch from the short readiness attempt to the
 configured upload timeout for the transfer phase.
+The final USB COMMIT is drained from the driver's output queue before the port is
+closed and reopened for GDB; upload/execute commands are never replayed on failure.
 
 **Readiness wait** defaults to 30 seconds (1–120). The manual check waits at most
 3 seconds; launch uses the full configured wait. **Upload timeout** defaults to
