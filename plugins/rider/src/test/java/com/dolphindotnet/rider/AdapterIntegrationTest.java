@@ -15,28 +15,35 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Uses the actual client and actual published .NET adapter; only RSP is fake. */
 class AdapterIntegrationTest {
     @TempDir Path root;
-    @Test void realTcpAdapter() throws Exception { run("tcp"); }
-    @Test @EnabledOnOs(OS.LINUX) void realSerialAdapterThroughPty() throws Exception { run("usbGecko"); }
-    private void run(String transport) throws Exception {
+    @Test void realTcpAdapter() throws Exception { run("tcp", false); }
+    @Test void launcherUploadThenLibogcRegisters() throws Exception { run("tcp", true); }
+    @Test @EnabledOnOs(OS.LINUX) void realSerialAdapterThroughPty() throws Exception { run("usbGecko", false); }
+    private void run(String transport, boolean consoleLauncher) throws Exception {
         var repository = Path.of(Objects.requireNonNull(System.getProperty("dnd.repositoryRoot"), "Missing repositoryRoot test property"));
         var adapter = Objects.requireNonNull(System.getProperty("dnd.adapter"), "Missing published adapter test property");
-        var fixture = new ProcessBuilder("python3", repository.resolve("tests/rider_dap_fixture.py").toString(),
-            root.resolve("build with spaces 日本").toString(), transport).redirectError(ProcessBuilder.Redirect.INHERIT).start();
+        var fixture = new ProcessBuilder(System.getProperty("dnd.python", "python3"), repository.resolve("tests/rider_dap_fixture.py").toString(),
+            root.resolve("build with spaces 日本").toString(), transport, Boolean.toString(consoleLauncher)).redirectError(ProcessBuilder.Redirect.INHERIT).start();
         var reader = new BufferedReader(new InputStreamReader(fixture.getInputStream(), StandardCharsets.UTF_8));
         var writer = new PrintWriter(new OutputStreamWriter(fixture.getOutputStream(), StandardCharsets.UTF_8), true);
         var process = new ProcessBuilder("dotnet", adapter).start();
         var stops = new LinkedBlockingQueue<StoppedEventArguments>();
         var continued = new LinkedBlockingQueue<Boolean>();
+        var output = new LinkedBlockingQueue<String>();
         var client = new DapClient(process, new DapClient.Listener() {
             @Override public void stopped(StoppedEventArguments args) { stops.add(args); }
             @Override public void continued() { continued.add(true); }
-            @Override public void output(String text, boolean error) { if (error) System.err.print(text); }
+            @Override public void output(String text, boolean error) { output.add(text); if (error) System.err.print(text); }
             @Override public void terminated() { }
         });
         try {
             var gson = new GsonBuilder().setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE).create();
             @SuppressWarnings("unchecked") Map<String, Object> arguments = gson.fromJson(readLine(reader), Map.class);
             client.start(arguments).get(10, TimeUnit.SECONDS);
+            if (consoleLauncher) {
+                assertTrue(output.stream().anyMatch(line -> line.contains("Upload [") && line.contains("] 0% (")));
+                assertTrue(output.stream().anyMatch(line -> line.contains("Upload [") && line.contains("] 100% (")));
+                assertTrue(output.stream().anyMatch(line -> line.contains("acknowledged execution")));
+            }
             var path = root.resolve("build with spaces 日本/日本/Game.cs").toString();
             var request = new SetBreakpointsArguments(); var source = new Source(); source.setPath(path); request.setSource(source);
             var point = new SourceBreakpoint(); point.setLine(11); request.setBreakpoints(new SourceBreakpoint[]{point});
@@ -79,6 +86,10 @@ class AdapterIntegrationTest {
             writer.println("status"); var status = JsonParser.parseString(readLine(reader)).getAsJsonObject();
             assertEquals(0, status.getAsJsonArray("breakpoints").size());
             assertEquals(0, status.getAsJsonArray("errors").size());
+            if (consoleLauncher) {
+                assertTrue(java.util.stream.StreamSupport.stream(status.getAsJsonArray("commands").spliterator(), false)
+                    .anyMatch(c -> c.getAsString().equals("g")), "libogc register fallback must survive upload-to-GDB handoff");
+            }
             assertFalse(java.util.stream.StreamSupport.stream(status.getAsJsonArray("commands").spliterator(), false).anyMatch(c -> c.getAsString().equals("k")));
         } finally {
             client.close(); if (process.isAlive()) { process.destroyForcibly(); process.waitFor(5, TimeUnit.SECONDS); }

@@ -36,6 +36,21 @@ uploads the exact validated ELF snapshot, verifies its acceptance, requests
 execution, then closes the upload connection and attaches to GDB. The console
 shows the corresponding receive/validate/execute states.
 
+The console's footer bar advances with bytes actually received, with byte counts
+and percentage in its status text. Rider and Visual Studio also display a bounded
+text progress bar for bytes sent by the host. Host completion is followed by the
+receiver's CRC/layout checks and execution acknowledgement; 100% sent alone does
+not establish a successful launch. Interrupted transfers do not report completion
+before all bytes arrive/write successfully.
+
+Use a newly bundled launcher DOL with Rider 0.3.1 or later. The receiver fixes
+single-byte USB polling that could make large ELF transfers exceed its deadline;
+upgrading the plugin alone cannot change a DOL already running on the console.
+USB driver read/write timeouts switch from the short readiness attempt to the
+configured upload timeout for the transfer phase.
+The final USB COMMIT is drained from the driver's output queue before the port is
+closed and reopened for GDB; upload/execute commands are never replayed on failure.
+
 **Readiness wait** defaults to 30 seconds (1–120). The manual check waits at most
 3 seconds; launch uses the full configured wait. **Upload timeout** defaults to
 60 seconds (1–60 for our receiver, whose whole native session also has a
@@ -112,6 +127,12 @@ ELF is rejected, check its architecture, size, native load ranges and staging
 collision. If GDB does not connect, check the application's build-time debugger
 settings, network configuration/EXI slot and boot delay. The launcher does not
 configure the uploaded application's network or change its GDB transport.
+
+Physical libogc2 stubs can return an empty response to optional single-register
+`pN` reads while supporting the classic PowerPC `g` register packet. The adapter
+uses that bulk packet when explicitly unsupported, so loading stack frames after
+upload does not terminate the session. Invalid packets and remote errors remain
+failures. This is separate from a disconnect while bytes are transferring.
 
 DNDL uses 16-byte `DNDL`/version-1 frames, big-endian fields, a per-session nonce,
 uncompressed ELF bytes and IEEE CRC32. See the native launcher README for the

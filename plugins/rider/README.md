@@ -10,6 +10,10 @@ the selected Debug ELF to a console waiting in Swiss. See [USB Gecko launching](
 **DolphinDotNet ELF launcher (BBA / USB Gecko)** adds receiver-readiness checks
 and acknowledged ELF execution through our console loader. See [setup](../../docs/console-launcher.md).
 
+Version 0.3.1 includes host upload progress and libogc2 bulk-register compatibility.
+Copy the newly bundled launcher DOL to the console for the USB batching fix,
+footer progress bar and logo; updating the plugin alone does not update a running DOL.
+
 C# gutter breakpoints recognize DolphinDotNet SDK projects without selecting an
 attach configuration. Existing attach configurations remain available for
 multilaunch workflows.
@@ -21,6 +25,8 @@ Java 25, .NET 8 and Python 3 for builds/tests.
 ```sh
 ./gradlew test buildPlugin verifyPlugin
 ```
+
+On Windows, set `PYTHON` to a Python executable if `python3` is unavailable.
 
 The ZIP in `build/distributions` includes the adapter. Requires the .NET 8 runtime
 on the Rider process PATH. This is an initial integration implementation;

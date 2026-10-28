@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
 
-version = "0.3.0"
+version = "0.3.1"
 group = "com.dolphindotnet"
 repositories {
     mavenCentral()
@@ -61,4 +61,5 @@ tasks.test {
     inputs.dir(adapterOutput)
     systemProperty("dnd.adapter", adapterOutput.get().file("DolphinDotNet.DebugAdapter.dll").asFile.absolutePath)
     systemProperty("dnd.repositoryRoot", rootDir.resolve("../..").canonicalPath)
+    systemProperty("dnd.python", System.getenv("PYTHON") ?: "python3")
 }

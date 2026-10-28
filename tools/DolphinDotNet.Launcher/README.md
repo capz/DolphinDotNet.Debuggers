@@ -20,6 +20,20 @@ Both Gecko slots are checked. One transfer is served at a time. The application
 must be built with a waiting GDB stub for the selected transport/EXI slot. It
 owns its network/GDB settings after handoff; the launcher does not rewrite them.
 
+During an upload, the footer shows a progress bar beside the logo, and the text
+console reports actual received bytes and percentage. A full bar means the
+complete binary arrived; checksum/layout validation and execution follow
+separately. Interrupted uploads retain their partial progress and report failure.
+Progress updates are bounded to roughly one per percent to keep rendering out
+of the transfer hot path.
+
+USB FIFO calls transfer bounded batches of up to 3,968 bytes under each EXI lock.
+The libogc retry count includes successful bytes: the earlier retry budget of one
+limited every call to a single byte, risking the 60-second session limit on large
+debug ELFs. Empty polls remain bounded and transport errors terminate the session
+instead of being retried until timeout. Replace the console DOL as well as
+updating the IDE plugin to obtain this receiver fix.
+
 ## Build and boot
 
 Both debugger plugins bundle the DOL, these instructions, the license and a
@@ -52,8 +66,23 @@ docker run --rm --mount "type=bind,source=$PWD,target=/src" \
 On PowerShell use `${PWD}` and a single line, or PowerShell's line continuation.
 The bootable output is `build/DolphinDotNet.Launcher.dol` plus its bootstrap
 ELF/map. The receiver's own symbols are in `build/receiver.elf` / `receiver.map`.
+The bootstrap load segment starts at `0x80003100` and excludes ELF headers.
+Loading those headers at `0x80000000` would overwrite console boot parameters
+and prevent receiver startup on hardware. Initial startup executes the reload
+body directly; entering the installed `0x80001800` reload hook at that point
+causes Dolphin to stop emulation. The hook remains installed for console returns.
+Build and packaging checks reject bootstrap layouts that touch low memory or the
+resident reservation and verify the emitted DOL against its ELF.
 The DOL includes a pristine receiver image, packed from loadable segments only;
 debug metadata consumes no resident memory. Generated files are ignored by Git.
+
+The supplied Dolphin Dotnet Cube logo is embedded as 300x200 YUV422 pixels and
+drawn 20 pixels from the bottom and right edges. Status text scrolls within the
+area above that footer. The launcher needs no image decoder, filesystem or GPU
+renderer for the logo. Its original PNG and converted bytes are in `assets/`.
+To regenerate the asset after updating the PNG, run
+`python3 tools/DolphinDotNet.Launcher/assets/convert_logo.py` from the repository
+root with Pillow installed. Normal launcher builds use the checked-in YUV422.
 
 Default networking uses DHCP, with TCP upload port **4299**. Static builds can
 use `make clean` followed by:

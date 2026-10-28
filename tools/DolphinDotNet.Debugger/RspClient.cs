@@ -26,6 +26,7 @@ public sealed class RspClient : IAsyncDisposable
     private bool _interruptDuplicateStopDrained;
     private volatile bool _continuing;
     private bool _continueInterrupted;
+    private bool _bulkRegisterReads;
 
     public RspClient(Stream stream, bool leaveOpen = true, TimeSpan? timeout = null)
     {
@@ -239,13 +240,29 @@ public sealed class RspClient : IAsyncDisposable
         if (reply != "OK") throw new InvalidDataException("Invalid GDB memory-write reply: " + reply);
     }
 
-    /// <summary>Register bytes remain raw until the target's architecture/byte order is known.</summary>
+    /// <summary>Read a PowerPC register, falling back to libogc2's fixed bulk
+    /// register packet when the optional single-register command is unsupported.</summary>
     public async Task<byte[]> ReadRegisterAsync(int index, CancellationToken token = default)
     {
         if (index is < 0 or > 255) throw new ArgumentOutOfRangeException(nameof(index));
-        var response = await CommandAsync($"p{index:x}", token).ConfigureAwait(false);
-        if (IsRemoteError(response)) throw new RspRemoteException("Target refused register read: " + response);
-        if (response.Length == 0 || (response.Length & 1) != 0)
+        if (!_bulkRegisterReads)
+        {
+            var response = await CommandAsync($"p{index:x}", token).ConfigureAwait(false);
+            if (IsRemoteError(response)) throw new RspRemoteException("Target refused register read: " + response);
+            if (response.Length != 0) return DecodeRegisterBytes(response);
+            // An empty, checksummed RSP reply explicitly means unsupported.
+            // Malformed replies and transport errors must never trigger a fallback.
+            _bulkRegisterReads = true;
+        }
+        var layout = PowerPcRegisterPacket.Location(index);
+        var bulk = await CommandAsync("g", token).ConfigureAwait(false);
+        if (IsRemoteError(bulk)) throw new RspRemoteException("Target refused bulk register read: " + bulk);
+        return PowerPcRegisterPacket.Extract(bulk, layout.Offset, layout.Size);
+    }
+
+    private static byte[] DecodeRegisterBytes(string response)
+    {
+        if ((response.Length & 1) != 0)
             throw new InvalidDataException("Invalid register response: " + response);
         try { return Convert.FromHexString(response); }
         catch (FormatException ex) { throw new InvalidDataException("Invalid register bytes.", ex); }

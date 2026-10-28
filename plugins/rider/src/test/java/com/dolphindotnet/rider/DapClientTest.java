@@ -13,7 +13,7 @@ class DapClientTest {
     @Test void launchUsesSharedAdapterAndWaitsForInitialized() throws Exception {
         Path peer = temp.resolve("launch.py"), log = temp.resolve("launch.jsonl");
         try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
-        var process = new ProcessBuilder("python3", peer.toString(), log.toString()).start();
+        var process = new ProcessBuilder(System.getProperty("dnd.python", "python3"), peer.toString(), log.toString()).start();
         var client = new DapClient(process, new DapClient.Listener() {
             @Override public void stopped(StoppedEventArguments args) { }
             @Override public void continued() { }
@@ -32,7 +32,7 @@ class DapClientTest {
     @Test void initializeAttachConfigurePauseStackStepsAndDisconnect() throws Exception {
         Path peer = temp.resolve("peer.py"), log = temp.resolve("requests.jsonl");
         try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
-        var process = new ProcessBuilder("python3", peer.toString(), log.toString()).start();
+        var process = new ProcessBuilder(System.getProperty("dnd.python", "python3"), peer.toString(), log.toString()).start();
         var stops = new LinkedBlockingQueue<StoppedEventArguments>();
         var resumed = new CountDownLatch(1);
         var client = new DapClient(process, new DapClient.Listener() {
@@ -74,7 +74,7 @@ class DapClientTest {
         for (var mode : List.of("earlyExit", "closeStdout", "unresponsive", "rejectAttach", "missingInitialized", "cancel")) {
             Path peer = temp.resolve(mode + ".py");
             try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
-            var process = new ProcessBuilder("python3", peer.toString(), temp.resolve(mode + ".jsonl").toString(),
+            var process = new ProcessBuilder(System.getProperty("dnd.python", "python3"), peer.toString(), temp.resolve(mode + ".jsonl").toString(),
                 mode.equals("cancel") ? "unresponsive" : mode).start();
             var terminated = new java.util.concurrent.atomic.AtomicInteger();
             var client = new DapClient(process, new DapClient.Listener() {
@@ -97,7 +97,7 @@ class DapClientTest {
     @Test void crashAfterAttachTerminatesOnceAndReapsProcess() throws Exception {
         Path peer = temp.resolve("crash.py");
         try (var input = getClass().getResourceAsStream("/fake_adapter.py")) { Files.copy(Objects.requireNonNull(input), peer); }
-        var process = new ProcessBuilder("python3", peer.toString(), temp.resolve("crash.jsonl").toString(), "crashAfterConfigure").start();
+        var process = new ProcessBuilder(System.getProperty("dnd.python", "python3"), peer.toString(), temp.resolve("crash.jsonl").toString(), "crashAfterConfigure").start();
         var count = new java.util.concurrent.atomic.AtomicInteger();
         var ended = new CountDownLatch(1);
         var client = new DapClient(process, new DapClient.Listener() {
