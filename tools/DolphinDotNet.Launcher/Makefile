@@ -11,7 +11,7 @@ TARGET := build/DolphinDotNet.Launcher
 PYTHON ?= python3
 CFLAGS := $(MACHDEP) -O2 -g -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -I$(LIBOGC_INC) -D_DEFAULT_SOURCE
 CPPFLAGS := -DDND_LAUNCHER_PORT=$(PORT) -DDND_LAUNCHER_IP='"$(IP)"' -DDND_LAUNCHER_MASK='"$(NETMASK)"' -DDND_LAUNCHER_GATEWAY='"$(GATEWAY)"'
-OBJECTS := build/gamecube.o build/elf.o build/protocol.o build/trampoline.o
+OBJECTS := build/gamecube.o build/elf.o build/protocol.o build/branding.o build/logo.o build/trampoline.o
 .PHONY: all clean test
 all: $(TARGET).dol
 build:
@@ -19,6 +19,8 @@ build:
 build/%.o: %.c elf.h protocol.h resident.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 build/trampoline.o: trampoline.S | build
+	$(CC) $(MACHDEP) -c $< -o $@
+build/logo.o: logo.S branding.h assets/logo.yuyv | build
 	$(CC) $(MACHDEP) -c $< -o $@
 build/receiver.elf: $(OBJECTS) Makefile
 	$(CC) $(MACHDEP) -Wl,--gc-sections,-Map,build/receiver.map $(OBJECTS) -L$(LIBOGC_LIB) -lbba -logc -lm -o $@

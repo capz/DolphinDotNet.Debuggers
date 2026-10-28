@@ -1,5 +1,6 @@
 #include "protocol.h"
 #include "resident.h"
+#include "branding.h"
 #include <gccore.h>
 #include <network.h>
 #include <ogc/usbgecko.h>
@@ -129,7 +130,10 @@ int main(void) {
     VIDEO_Init(); PAD_Init();
     GXRModeObj *mode=VIDEO_GetPreferredMode(NULL);
     void *framebuffer=MEM_K0_TO_K1(SYS_AllocateFramebuffer(mode));
-    console_init(framebuffer,20,20,mode->fbWidth-40,mode->xfbHeight-40,mode->fbWidth*VI_DISPLAY_PIX_SZ);
+    VIDEO_ClearFrameBuffer(mode,framebuffer,COLOR_BLACK);
+    unsigned footer=dnd_launcher_logo_footer(mode->fbWidth,mode->xfbHeight);
+    console_init(framebuffer,20,20,mode->fbWidth-40,mode->xfbHeight-40-footer,mode->fbWidth*VI_DISPLAY_PIX_SZ);
+    dnd_launcher_draw_logo(framebuffer,mode->fbWidth,mode->xfbHeight,mode->fbWidth*VI_DISPLAY_PIX_SZ);
     VIDEO_Configure(mode); VIDEO_SetNextFramebuffer(framebuffer); VIDEO_SetBlack(false); VIDEO_Flush(); VIDEO_WaitVSync();
     printf("DolphinDotNet ELF Launcher v1 (resident return enabled)\n\n");
     if (!reservation || reservation_end>DND_RESIDENT_BASE || (uintptr_t)reservation<0x80003100u) {

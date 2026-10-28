@@ -62,6 +62,14 @@ resident reservation and verify the emitted DOL against its ELF.
 The DOL includes a pristine receiver image, packed from loadable segments only;
 debug metadata consumes no resident memory. Generated files are ignored by Git.
 
+The supplied Dolphin Dotnet Cube logo is embedded as 300x200 YUV422 pixels and
+drawn 20 pixels from the bottom and right edges. Status text scrolls within the
+area above that footer. The launcher needs no image decoder, filesystem or GPU
+renderer for the logo. Its original PNG and converted bytes are in `assets/`.
+To regenerate the asset after updating the PNG, run
+`python3 tools/DolphinDotNet.Launcher/assets/convert_logo.py` from the repository
+root with Pillow installed. Normal launcher builds use the checked-in YUV422.
+
 Default networking uses DHCP, with TCP upload port **4299**. Static builds can
 use `make clean` followed by:
 
