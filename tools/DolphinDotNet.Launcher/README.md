@@ -52,6 +52,13 @@ docker run --rm --mount "type=bind,source=$PWD,target=/src" \
 On PowerShell use `${PWD}` and a single line, or PowerShell's line continuation.
 The bootable output is `build/DolphinDotNet.Launcher.dol` plus its bootstrap
 ELF/map. The receiver's own symbols are in `build/receiver.elf` / `receiver.map`.
+The bootstrap load segment starts at `0x80003100` and excludes ELF headers.
+Loading those headers at `0x80000000` would overwrite console boot parameters
+and prevent receiver startup on hardware. Initial startup executes the reload
+body directly; entering the installed `0x80001800` reload hook at that point
+causes Dolphin to stop emulation. The hook remains installed for console returns.
+Build and packaging checks reject bootstrap layouts that touch low memory or the
+resident reservation and verify the emitted DOL against its ELF.
 The DOL includes a pristine receiver image, packed from loadable segments only;
 debug metadata consumes no resident memory. Generated files are ignored by Git.
 

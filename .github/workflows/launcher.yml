@@ -19,6 +19,8 @@ jobs:
       - name: Test independent host wire vectors
         working-directory: tools/DolphinDotNet.Launcher
         run: python3 tests/wire_test.py
+      - name: Reject bootstrap layouts that overwrite console boot data
+        run: python3 -m unittest discover -s tests -p test_launcher_boot.py
   resident-powerpc:
     needs: receiver-core
     runs-on: ubuntu-latest
@@ -38,6 +40,11 @@ jobs:
       - name: Execute linked bootstrap and repeated return paths
         working-directory: tools/DolphinDotNet.Launcher
         run: python tests/resident_cpu_test.py
+      - name: Verify bootstrap preserves low-memory boot parameters
+        run: >-
+          python scripts/verify_launcher_boot.py
+          tools/DolphinDotNet.Launcher/build/DolphinDotNet.Launcher.elf
+          tools/DolphinDotNet.Launcher/build/DolphinDotNet.Launcher.dol
       - name: Verify bootable DOL matches the linked launcher
         run: >-
           python scripts/verify_dol_elf.py

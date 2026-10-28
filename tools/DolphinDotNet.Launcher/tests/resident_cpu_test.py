@@ -36,12 +36,17 @@ def check(boot, receiver, archive):
     boot_entry = struct.unpack_from('>I', boot, 24)[0]
     cpu = Uc(UC_ARCH_PPC, UC_MODE_PPC32 | UC_MODE_BIG_ENDIAN)
     cpu.mem_map(0x80000000, end - 0x80000000)
+    # Seed console boot data before the DOL/ELF load, so a low PT_LOAD fails too.
+    preserved = {0x28: 0x01800000, 0xf0: 0x01800000, 0xf8: 162000000, 0xfc: 486000000}
+    for offset, value in preserved.items():
+        cpu.mem_write(0x80000000 + offset, struct.pack('>I', value))
     for address, data, memory in segments(boot):
         cpu.mem_write(address, data + bytes(memory - len(data)))
     arrived = [False, False]
 
     def block(cpu, address, size, unused):
         del size, unused
+        assert run != 0 or address != stub, 'initial boot entered Dolphin homebrew exit hook'
         if base <= address < end:
             arrived[0] = True
         if arrived[0] and address == entry:
@@ -71,6 +76,8 @@ def check(boot, receiver, archive):
         for address, data, memory in segments(receiver):
             assert cpu.mem_read(address, memory) == data + bytes(memory - len(data)), hex(address)
         assert cpu.mem_read(base, len(archive)) == archive
+        for offset, value in preserved.items():
+            assert struct.unpack('>I', cpu.mem_read(0x80000000 + offset, 4))[0] == value, hex(offset)
         assert cpu.mem_read(stub + 4, 8) == b'STUBHAXX'
         for word in (0x34, 0x38, 0xec):
             assert struct.unpack('>I', cpu.mem_read(0x80000000 + word, 4))[0] == base

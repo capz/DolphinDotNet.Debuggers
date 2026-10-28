@@ -7,6 +7,7 @@ import shutil
 import subprocess
 
 from verify_dol_elf import inspect
+from verify_launcher_boot import check
 
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER = ROOT / 'tools/DolphinDotNet.Launcher'
@@ -18,6 +19,7 @@ def stage(output, source=LAUNCHER / 'build'):
     source, output = Path(source), Path(output)
     dol = source / FILES[0]
     inspect((source / 'DolphinDotNet.Launcher.elf').read_bytes(), dol.read_bytes())
+    check((source / 'DolphinDotNet.Launcher.elf').read_bytes(), dol.read_bytes())
     commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
     output.mkdir(parents=True, exist_ok=True)
     shutil.copy2(dol, output / dol.name)

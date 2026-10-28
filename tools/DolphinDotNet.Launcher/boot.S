@@ -38,10 +38,9 @@ dnd_launcher_boot:
     lis 3,DND_RETURN_STUB@h
     ori 3,3,DND_RETURN_STUB@l
     bl flush_code
-    lis 12,DND_RETURN_STUB@h
-    ori 12,12,DND_RETURN_STUB@l
-    mtctr 12
-    bctr
+    /* Dolphin hooks 0x80001800 as homebrew exit. Start the reload body here;
+     * keep the installed low-memory stub available for later console returns. */
+    b return_body
 
 /* r3=start (32-aligned), r4=end. Flush writes before invalidating code. */
 flush_code:
@@ -63,9 +62,9 @@ flush_code:
  * stops devices and multitasking before invoking this on main return / exit(). */
 .balign 32
 return_stub:
-    b 5f
+    b return_body
     .ascii "STUBHAXX"
-5:  mfmsr 0
+return_body:  mfmsr 0
     rlwinm 0,0,0,17,15
     mtmsr 0
     isync
