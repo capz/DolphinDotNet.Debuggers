@@ -40,10 +40,12 @@ directory while Rider is closed. Keep the rest of your settings and caches.
 See JetBrains' [directory reference](https://www.jetbrains.com/help/rider/Directories_Used_by_the_IDE_to_Store_Settings_Caches_Plugins_and_Logs.html).
 A `ClassFormatError` naming a built-in JetBrains class needs investigation of
 that class and the IDE's state; it does not identify the plugin as the cause.
+The [startup investigation](../../docs/rider-startup-investigation.md) records
+the reported failure and the limits of the isolated reproduction checks.
 
 The ZIP in `build/distributions` includes the adapter. Requires the .NET 8 runtime
 on the Rider process PATH. This is an initial integration implementation;
-interactive Rider and physical hardware acceptance remain pending. Debugger targets
+interactive device debugging and physical hardware acceptance remain pending. Debugger targets
 must be Debug builds; Release target debugging is out of scope.
 
 See [configuration, target properties, protocol and acceptance](../../docs/rider-debugging.md).

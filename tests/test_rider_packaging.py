@@ -29,7 +29,8 @@ class RiderPackagingTests(unittest.TestCase):
 
     def test_ide_classes_cannot_leak_into_plugin_libraries(self):
         for entry in ('com/intellij/openapi/project/Project.class',
-                      'org/jetbrains/jps/service/impl/JpsServiceManagerImpl.class'):
+                      'org/jetbrains/jps/service/impl/JpsServiceManagerImpl.class',
+                      'META-INF/versions/25/com/intellij/openapi/project/Project.class'):
             with self.subTest(entry=entry), self.assertRaisesRegex(ValueError, 'Bundled IDE class'):
                 self.verify({'DolphinDotNet/lib/library.jar': jar_bytes({entry: b'IDE'})})
 
@@ -43,6 +44,13 @@ class RiderPackagingTests(unittest.TestCase):
         damaged = damaged.replace(b'original', b'corrupt!')
         with self.assertRaisesRegex(ValueError, 'JAR checksum failure'):
             self.verify({'DolphinDotNet/lib/plugin.jar': damaged})
+
+    def test_corrupted_outer_zip_is_rejected(self):
+        payload = jar_bytes({'DolphinDotNet/lib/plugin.jar': jar_bytes({'example.txt': b'original'})})
+        payload = payload.replace(b'original', b'corrupt!')
+        with ZipFile(io.BytesIO(payload)) as archive:
+            with self.assertRaisesRegex(ValueError, 'ZIP checksum failure'):
+                verify_jars(archive)
 
 
 if __name__ == '__main__':

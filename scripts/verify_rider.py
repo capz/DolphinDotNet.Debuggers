@@ -19,7 +19,12 @@ def verify_jars(archive):
             if damaged:
                 raise ValueError('Plugin JAR checksum failure: ' + name + ': ' + damaged)
             for entry in jar.namelist():
-                if entry.endswith('.class') and entry.startswith(('com/intellij/', 'org/jetbrains/jps/')):
+                class_name = entry
+                # Multi-release JAR entries can also be selected by Rider's JVM.
+                parts = entry.split('/', 3)
+                if len(parts) == 4 and parts[:2] == ['META-INF', 'versions'] and parts[2].isdigit():
+                    class_name = parts[3]
+                if class_name.endswith('.class') and class_name.startswith(('com/intellij/', 'org/jetbrains/jps/')):
                     raise ValueError('Bundled IDE class: ' + name + ': ' + entry)
 
 
