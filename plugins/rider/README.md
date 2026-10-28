@@ -28,6 +28,19 @@ Java 25, .NET 8 and Python 3 for builds/tests.
 
 On Windows, set `PYTHON` to a Python executable if `python3` is unavailable.
 
+Before release, install the exact distribution ZIP into an isolated Rider profile,
+open a project, exit Rider, and start the same profile again. API compatibility
+verification alone does not exercise IDE startup. Keep the test profile's logs.
+The package verifier also checks ZIP/JAR checksums and rejects bundled IntelliJ
+and JPS implementation classes, which must come from Rider itself.
+
+If Rider fails to start after installation, preserve `idea.log` and disable this
+plugin by moving only `plugins/DolphinDotNet.Rider` outside the Rider configuration
+directory while Rider is closed. Keep the rest of your settings and caches.
+See JetBrains' [directory reference](https://www.jetbrains.com/help/rider/Directories_Used_by_the_IDE_to_Store_Settings_Caches_Plugins_and_Logs.html).
+A `ClassFormatError` naming a built-in JetBrains class needs investigation of
+that class and the IDE's state; it does not identify the plugin as the cause.
+
 The ZIP in `build/distributions` includes the adapter. Requires the .NET 8 runtime
 on the Rider process PATH. This is an initial integration implementation;
 interactive Rider and physical hardware acceptance remain pending. Debugger targets

@@ -13,7 +13,7 @@ from zipfile import ZipFile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from dol_sections import pad
-from package_launcher import FILES, stage, verify_bundle
+from package_launcher import FILES, ICON, LAUNCHER, stage, verify_bundle
 from release_assets import collect_assets
 from test_dol_sections import fixture
 from test_launcher_boot import fixture as boot_fixture
@@ -23,9 +23,11 @@ class LauncherPackagingTests(unittest.TestCase):
     def bundle(self):
         dol = pad(fixture())
         struct.pack_into('>II', dol, 0xd8, 0, 0)  # Stackless bootstrap has no BSS.
+        icon = (LAUNCHER / 'assets/logo.png').read_bytes()
         return dict(zip(FILES, (dol, b'Boot instructions', b'License', json.dumps(dict(
             repository='capz/DolphinDotNet.Debuggers', resident=True,
-            sha256=hashlib.sha256(dol).hexdigest())).encode())))
+            sha256=hashlib.sha256(dol).hexdigest(),
+            iconSha256=hashlib.sha256(icon).hexdigest())).encode(), icon)))
 
     def test_release_publishes_exact_dol_and_complete_standalone_archive(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -39,6 +41,7 @@ class LauncherPackagingTests(unittest.TestCase):
                 self.assertEqual(set(FILES), set(archive.namelist()))
                 verify_bundle(archive.read)
                 self.assertEqual(files[FILES[0]], archive.read(FILES[0]))
+                self.assertEqual(files[ICON], archive.read(ICON))
 
     def test_missing_file_corruption_and_invalid_dol_fail_verification(self):
         for name in FILES:
@@ -49,6 +52,10 @@ class LauncherPackagingTests(unittest.TestCase):
         files = self.bundle()
         files[FILES[0]] += b'corrupted'
         with self.assertRaisesRegex(ValueError, 'checksum'):
+            verify_bundle(files.__getitem__)
+        files = self.bundle()
+        files[ICON] += b'corrupted'
+        with self.assertRaisesRegex(ValueError, 'icon checksum'):
             verify_bundle(files.__getitem__)
         files = self.bundle()
         files[FILES[0]] = b'not a DOL'
@@ -89,6 +96,9 @@ class LauncherPackagingTests(unittest.TestCase):
             self.assertEqual((root / 'staged' / FILES[0]).read_bytes(), dol)
             manifest = json.loads((root / 'staged' / 'build-info.json').read_text())
             self.assertEqual(manifest['sha256'], hashlib.sha256(dol).hexdigest())
+            icon = (root / 'staged' / ICON).read_bytes()
+            self.assertEqual(icon, (LAUNCHER / 'assets/logo.png').read_bytes())
+            self.assertEqual(manifest['iconSha256'], hashlib.sha256(icon).hexdigest())
 
 
 if __name__ == '__main__':

@@ -34,7 +34,7 @@ val launcherOutput = rootDir.resolve("../../out/launcher")
 val checkLauncher by tasks.registering {
     inputs.dir(launcherOutput)
     doLast {
-        for (name in listOf("DolphinDotNet.Launcher.dol", "README.md", "LICENSE", "build-info.json")) {
+        for (name in listOf("DolphinDotNet.Launcher.dol", "DolphinDotNet.Launcher.png", "README.md", "LICENSE", "build-info.json")) {
             check(launcherOutput.resolve(name).isFile) {
                 "Missing bundled GameCube launcher; run python scripts/package_launcher.py --build from the repository root."
             }
