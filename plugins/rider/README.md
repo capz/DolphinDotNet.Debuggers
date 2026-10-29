@@ -1,5 +1,18 @@
 # DolphinDotNet Rider plugin
 
+Version **0.4.0** adds three automatic sample actions: **Run in emulator**,
+**Debug on emulator**, and **Debug on target**. Emulator debugging starts local
+Dolphin, attaches, installs breakpoints and continues. Target debugging builds
+for the first saved target, uploads through the bundled ELF launcher, attaches
+and continues. The sample repository supplies all three shared configurations.
+The plugin owns the build; no extra before-run Build task is needed.
+
+In projects referencing DolphinDotNet, the status bar checks the first target's
+ELF launcher every ten seconds and shows **Target GameCube available** or
+**Target GameCube not available**. During connection and debugging it shows
+**Target GameCube in use** and suspends polling. Availability means the receiver
+is ready for another upload, rather than simply that the USB device is connected.
+
 **Run → Attach to Nintendo GameCube…**, immediately below **Attach to Remote Process…**,
 opens the attach dialog directly. Choose the
 Debug build folder and a saved BBA/TCP or USB Gecko target, then click **Attach**.

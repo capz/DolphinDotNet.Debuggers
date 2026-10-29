@@ -15,7 +15,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private Task? _execution;
     private volatile bool _running;
     private volatile bool _pauseRequested;
-    private bool _initialized, _configured, _closed;
+    private bool _initialized, _configured, _closed, _stopOnEntry = true;
     private int _terminated;
     private int _lineBase = 1, _columnBase = 1, _nextFrame;
     private bool _uriPaths;
@@ -99,6 +99,9 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             Interlocked.Exchange(ref _terminated, 0);
             _telemetryReported = false;
             _configured = false;
+            _stopOnEntry = !args.TryGetProperty("stopOnEntry", out var stopOnEntry) || stopOnEntry.GetBoolean();
+            int connectSeconds = args.TryGetProperty("connectTimeoutSeconds", out var connectTimeout) ? connectTimeout.GetInt32() : 0;
+            if (connectSeconds is < 0 or > 60) throw new ArgumentException("connectTimeoutSeconds must be between 0 and 60.");
             _frames.Clear();
             _stackTrace = null;
             _reportedUnwindReasons.Clear();
@@ -129,12 +132,13 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 }
                 else throw new ArgumentException("launcher must be swiss or dolphinDotNet.");
             }
-            using var timeout = new CancellationTokenSource(transport.Timeout);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+            timeout.CancelAfter(connectSeconds > 0 ? TimeSpan.FromSeconds(connectSeconds) : transport.Timeout);
             try
             {
                 _client = transport.Kind == "usbGecko"
                     ? RspClient.ConnectUsbGecko(transport.SerialPort!, transport.BaudRate, transport.Timeout)
-                    : await RspClient.ConnectTcpAsync(transport.Host!, transport.Port, transport.Timeout, timeout.Token);
+                    : await ConnectTcpAsync(transport, connectSeconds > 0, timeout.Token);
                 _stop = await new SourceStepper(_client, _symbols).ReadProgramCounterAsync(await _client.QueryStopAsync());
                 if (_stop.Exited) throw new InvalidOperationException("Target has exited.");
                 _breakpoints = new BreakpointRegistry(_client, () => _pauseRequested);
@@ -205,7 +209,15 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 if (_configured) throw new InvalidOperationException("Already configured.");
                 _configured = true;
                 await connection.RespondAsync(request);
-                await StoppedAsync("entry", "Attached; target is paused. Press Resume to run to a source breakpoint. Native startup code may not have a managed stack yet.");
+                if (_stopOnEntry)
+                    await StoppedAsync("entry", "Attached; target is paused. Press Resume to run to a source breakpoint. Native startup code may not have a managed stack yet.");
+                else
+                {
+                    _running = true;
+                    _pauseRequested = false;
+                    await connection.EventAsync("continued", new { threadId = 1, allThreadsContinued = true });
+                    _execution = ExecuteAsync("continue");
+                }
                 break;
             case "setExceptionBreakpoints":
                 if (new[] { "filters", "filterOptions", "exceptionOptions" }.Any(name =>
@@ -350,6 +362,19 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 break;
             default:
                 throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only stopped inspection is supported.");
+        }
+    }
+
+    private static async Task<RspClient> ConnectTcpAsync(AttachTransport transport, bool retryRefused, CancellationToken token)
+    {
+        // Dolphin accepts one debugger. Wait by retrying refused connects only;
+        // never probe its socket or replay a partially established RSP session.
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+            try { return await RspClient.ConnectTcpAsync(transport.Host!, transport.Port, transport.Timeout, token); }
+            catch (System.Net.Sockets.SocketException error) when (retryRefused && error.SocketErrorCode == System.Net.Sockets.SocketError.ConnectionRefused)
+            { await Task.Delay(100, token); }
         }
     }
 

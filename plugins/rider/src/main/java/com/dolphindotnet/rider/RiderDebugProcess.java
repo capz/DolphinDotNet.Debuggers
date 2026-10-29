@@ -30,6 +30,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     private final Map<Integer, XLineBreakpoint<SourceBreakpointProperties>> breakpointIds = new HashMap<>();
     private final AtomicBoolean ended = new AtomicBoolean();
     private final ProcessHandler handler;
+    private final Runnable cleanup;
     private volatile boolean ready, running;
     private volatile long generation;
     private final XBreakpointHandler<XLineBreakpoint<SourceBreakpointProperties>> breakpointHandler = new XBreakpointHandler<>(SourceBreakpointType.class) {
@@ -40,8 +41,8 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
             breakpoints.remove(breakpoint); updateBreakpoints();
         }
     };
-    RiderDebugProcess(XDebugSession session, Process process, Map<String, Object> arguments) {
-        super(session); this.arguments = arguments;
+    RiderDebugProcess(XDebugSession session, Process process, Map<String, Object> arguments, Runnable cleanup) {
+        super(session); this.arguments = arguments; this.cleanup = cleanup;
         handler = new ProcessHandler() {
             { process.onExit().thenRun(() -> notifyProcessTerminated(process.exitValue())); }
             @Override protected void destroyProcessImpl() { stop(); }
@@ -128,6 +129,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     @Override public void stop() {
         if (!ended.compareAndSet(false, true)) return;
         ++generation; commands.shutdownNow(); dap.close(); ui(() -> getSession().stop());
+        cleanup.run();
     }
     @Override public boolean checkCanPerformCommands() { return ready && !ended.get(); }
     @Override public void startPausing() {

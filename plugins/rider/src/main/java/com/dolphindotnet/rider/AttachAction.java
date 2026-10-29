@@ -34,7 +34,9 @@ public final class AttachAction extends DumbAwareAction {
         }
         if (!new AttachDialog(project, config).showAndGet()) return;
         try {
-            AttachRunner.start(project, config, null);
+            AttachRunner.start(project, config, null).onError(error -> com.intellij.openapi.application.ApplicationManager.getApplication().invokeLater(() -> {
+                if (!project.isDisposed()) Messages.showErrorDialog(project, error.getMessage(), "DolphinDotNet Attach");
+            }));
             saved.remember(config);
         } catch (Exception error) {
             Messages.showErrorDialog(project, error.getMessage() == null ? error.toString() : error.getMessage(), "DolphinDotNet Attach");
