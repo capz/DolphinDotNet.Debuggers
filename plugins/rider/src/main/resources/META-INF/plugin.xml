@@ -10,7 +10,7 @@
         <programRunner implementation="com.dolphindotnet.rider.AttachRunner"/>
         <configurationType implementation="com.dolphindotnet.rider.LaunchConfigurationType"/>
         <programRunner implementation="com.dolphindotnet.rider.LaunchRunner"/>
-        <statusBarWidgetFactory implementation="com.dolphindotnet.rider.TargetStatusWidgetFactory" id="DolphinDotNet.Target" order="after Memory"/>
+        <statusBarWidgetFactory implementation="com.dolphindotnet.rider.TargetStatusWidgetFactory" id="DolphinDotNet.Target" order="before Memory"/>
         <xdebugger.breakpointType implementation="com.dolphindotnet.rider.SourceBreakpointType"/>
     </extensions>
     <actions>
