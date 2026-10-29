@@ -59,6 +59,19 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             if (mode != StepMode.Into && !originCfa.HasValue) return new(current, origin, SourceStepReason.UnwindUnavailable, 0);
         }
         var enteredSameSourceCallee = false;
+        async Task<bool> HitDistinctBreakpointAsync(RspStop stop, IReadOnlyList<SourceLocation> locations)
+        {
+            if (breakpointHit?.Invoke(stop.ProgramCounter!.Value) != true) return false;
+            // One C# statement can have many native breakpoint addresses. While
+            // stepping off it, those addresses are not new user breakpoint hits.
+            // Prove the activation as well: recursion at the same line must stop.
+            if (locations.Count == 1 && locations[0] == origin && originCfa.HasValue)
+            {
+                var activation = await unwinder.ReadCanonicalFrameAddressAsync(stop.ProgramCounter.Value, token).ConfigureAwait(false);
+                if (activation == originCfa) return false;
+            }
+            return true;
+        }
         for (var count = 1; count <= instructionLimit; count++)
         {
             token.ThrowIfCancellationRequested();
@@ -75,7 +88,7 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             // SIGTRAP is the expected single-step completion. Never hide crashes or interrupts.
             if (current.Signal != 5) return new(current, null, SourceStepReason.Signal, count);
             var locations = symbols.FindExact(current.ProgramCounter!.Value);
-            if (breakpointHit?.Invoke(current.ProgramCounter.Value) == true)
+            if (await HitDistinctBreakpointAsync(current, locations).ConfigureAwait(false))
                 return new(current, locations.Count == 1 ? locations[0] : null, SourceStepReason.UserBreakpoint, count);
             if (pauseRequested?.Invoke() == true)
                 return new(current, locations.Count == 1 ? locations[0] : null, SourceStepReason.Signal, count);
@@ -92,7 +105,7 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
                 current = await ReadProgramCounterAsync(await continueTo!(returnPc, token).ConfigureAwait(false), token).ConfigureAwait(false);
                 if (current.Exited) return new(current, null, SourceStepReason.Exited, count);
                 locations = symbols.FindExact(current.ProgramCounter!.Value);
-                if (current.Signal == 5 && breakpointHit?.Invoke(current.ProgramCounter.Value) == true)
+                if (current.Signal == 5 && await HitDistinctBreakpointAsync(current, locations).ConfigureAwait(false))
                     return new(current, locations.Count == 1 ? locations[0] : null, SourceStepReason.UserBreakpoint, count);
                 // Interrupts and traps away from the return address must stay
                 // visible, even when the stub reports every stop as SIGTRAP.

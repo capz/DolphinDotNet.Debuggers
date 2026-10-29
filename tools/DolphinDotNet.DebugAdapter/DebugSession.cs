@@ -77,6 +77,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             await connection.RespondAsync(request, new
             {
                 supportsConfigurationDoneRequest = true,
+                supportsEvaluateForHovers = true,
                 supportsTerminateDebuggee = false, supportsSuspendDebuggee = false,
                 exceptionBreakpointFilters = Array.Empty<object>()
             });
@@ -320,6 +321,23 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 }
                 await connection.RespondAsync(request, new { variables = values });
                 break;
+            case "evaluate":
+                if (!_frames.TryGetValue(args.GetProperty("frameId").GetInt32(), out var evaluationFrame))
+                    throw new ArgumentException("Unknown or stale frameId.");
+                var inspected = await new ReadOnlyExpressionInspector(_client, _symbols).ReadAsync(
+                    args.GetProperty("expression").GetString() ?? "", evaluationFrame.Frame,
+                    evaluationFrame.TopFrame, evaluationFrame.Lookup, _lifetime.Token);
+                var childReference = 0;
+                if (inspected.Children is not null && _objectViews.Count < 4096)
+                {
+                    childReference = ++_nextVariable;
+                    _objectViews.Add(childReference, inspected.Children);
+                }
+                await connection.RespondAsync(request, new { result = inspected.Value, type = inspected.Type,
+                    variablesReference = childReference,
+                    namedVariables = childReference == 0 ? 0 : ChildCount(inspected.Children!.Layout.Fields.Count),
+                    presentationHint = new { attributes = new[] { "readOnly" } } });
+                break;
             case "continue":
             case "stepIn":
             case "next":
@@ -342,7 +360,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 _execution = ExecuteAsync(command);
                 break;
             default:
-                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only stopped inspection is supported; evaluation is not implemented.");
+                throw new NotSupportedException($"Unsupported DAP request: {command}. Only read-only stopped inspection is supported.");
         }
     }
 

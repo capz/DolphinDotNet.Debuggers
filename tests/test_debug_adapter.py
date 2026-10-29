@@ -632,6 +632,48 @@ class AdapterTests(unittest.TestCase):
     def variables(self, reference, **args):
         return self.client.request('variables', dict(variablesReference=reference, **args))['body']['variables']
 
+    def test_hover_resolves_private_instance_fields_locals_and_explicit_this(self):
+        def snake(data):
+            variable = data['methods'][0]['variables'][0]
+            variable.update(name='this', group='Arguments')
+            data['inspection']['types'][0]['fields'][0]['name'] = 'length'
+            data['methods'][0]['variables'].append(dict(name='remaining', type='System.Int32',
+                group='Locals', storageBytes=4, location=dict(kind='register', register=3),
+                visibleAddresses=['0x80004008', '0x8000400c']))
+        self.attach_inspection(snake)
+        frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['id']
+        for expression, expected in [('length', '7'), ('this.length', '7'), ('this.Next.length', '7'), ('remaining', '42')]:
+            with self.subTest(expression=expression):
+                value = self.client.request('evaluate', dict(expression=expression, frameId=frame, context='hover'))['body']
+                self.assertEqual(expected, value['result'])
+                self.assertEqual('System.Int32', value['type'])
+
+    def test_hover_prefers_visible_local_over_implicit_instance_field(self):
+        def shadow(data):
+            data['methods'][0]['variables'][0].update(name='this', group='Arguments')
+            data['methods'][0]['variables'].append(dict(name='Count', type='System.Int32', group='Locals',
+                storageBytes=4, location=dict(kind='register', register=3), visibleAddresses=['0x80004008']))
+        self.attach_inspection(shadow)
+        frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['id']
+        self.assertEqual('42', self.client.request('evaluate', dict(expression='Count', frameId=frame))['body']['result'])
+        self.assertEqual('7', self.client.request('evaluate', dict(expression='this.Count', frameId=frame))['body']['result'])
+
+    def test_hover_is_read_only_bounded_and_rejects_stale_frames(self):
+        self.attach_inspection()
+        frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['id']
+        commands = list(self.target.commands)
+        for expression in ('box.Count = 1', 'box.GetCount()', 'box[0]', 'box.Count + 1', 'x'*257,
+                           'box.Next.Next.Next.Next.Next.Count'):
+            self.client.request('evaluate', dict(expression=expression, frameId=frame), success=False)
+        self.assertEqual(commands, self.target.commands)
+        self.client.request('evaluate', dict(expression='box.Missing', frameId=frame), success=False)
+        self.client.request('evaluate', dict(expression='nothing.Count', frameId=frame), success=False)
+        value = self.client.request('evaluate', dict(expression='box', frameId=frame))['body']
+        self.assertEqual('7', self.variables(value['variablesReference'])[0]['value'])
+        self.client.request('stepIn', dict(threadId=1)); self.client.event('stopped')
+        self.client.request('evaluate', dict(expression='box.Count', frameId=frame), success=False)
+        self.assertEqual(1, len(self.client.request('threads')['body']['threads']))
+
     def test_objects_expand_lazily_with_scalar_fields_strings_null_and_stale_handles(self):
         scope = self.attach_inspection()
         roots = {v['name']: v for v in self.variables(scope)}
@@ -884,6 +926,30 @@ class AdapterTests(unittest.TestCase):
         self.client.request('next', dict(threadId=1))
         self.assertEqual('SourceLocation', self.client.event('stopped')['description'])
         self.assertEqual(2, self.target.commands.count('s'))
+        self.assertEqual(11, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_step_over_ignores_other_native_breakpoints_for_its_current_source_line(self):
+        data = json.loads(self.address.read_text())
+        data['methods'][0]['breakpoints'] = [
+            dict(document='/build/日本/Game.cs', line=62,
+                 addresses=['0x80004000', '0x80004004', '0x80004008']),
+            dict(document='/build/日本/Game.cs', line=63, addresses=['0x8000400c'])]
+        self.address.write_text(json.dumps(data))
+        self.attach()
+        self.bp(lines=(62,))
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual(('step', 'SourceLocation'), (stop['reason'], stop['description']))
+        self.assertEqual(3, self.target.commands.count('s'))
+        self.assertEqual(63, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
+
+    def test_step_over_same_line_call_return_does_not_rehit_origin_breakpoint(self):
+        self.attach_call_target(same_line=True)
+        self.bp(lines=(10,))
+        self.target.continue_stop = 'T0540:80004004;'
+        self.client.request('next', dict(threadId=1))
+        stop = self.client.event('stopped')
+        self.assertEqual(('step', 'SourceLocation'), (stop['reason'], stop['description']))
         self.assertEqual(11, self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]['line'])
 
     def test_step_over_recursive_call_proves_activation_before_same_line_return(self):

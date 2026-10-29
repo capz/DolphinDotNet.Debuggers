@@ -479,7 +479,7 @@ static async Task TestRecursiveAndSameLineAsync()
                 ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0"),
                 ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0"),
                 ("s", "T0540:80001004;"), ("p1", "81700100"),
-                ("p1", "81700100"), ("s", "T0540:80001000;")
+                ("p1", "81700100"), ("s", "T0540:80001000;"), ("p1", "817000e0")
             }) { Check(await ReadFrameAsync(stream) == command, "recursive depth command " + command); await SendReplyAsync(stream, reply); Check(await ReadByteAsync(stream) == '+', "recursive ACK"); }
         });
         var symbols = SourceAddressMap.Load(elf, source, native);

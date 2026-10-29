@@ -7,6 +7,7 @@ import com.intellij.openapi.application.*;
 import com.intellij.openapi.editor.*;
 import com.intellij.openapi.fileTypes.*;
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.*;
 import com.intellij.xdebugger.*;
 import com.intellij.xdebugger.breakpoints.*;
@@ -182,6 +183,40 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
         private final StackFrame frame;
         private final long frameGeneration = generation;
         TargetFrame(StackFrame frame) { this.frame = frame; }
+        @Override public XDebuggerEvaluator getEvaluator() {
+            return new XDebuggerEvaluator() {
+                @Override public boolean isCodeFragmentEvaluationSupported() { return false; }
+                @Override public TextRange getExpressionRangeAtOffset(Project project, Document document, int offset, boolean sideEffectsAllowed) {
+                    var range = HoverExpression.at(document.getCharsSequence(), offset);
+                    return range == null ? null : new TextRange(range.start(), range.end());
+                }
+                @Override public void evaluate(@NotNull String expression, @NotNull XEvaluationCallback callback, @Nullable XSourcePosition position) {
+                    if (ended.get() || running || generation != frameGeneration) {
+                        callback.errorOccurred("Frame is no longer stopped."); return;
+                    }
+                    submit(() -> {
+                        try {
+                            if (running || generation != frameGeneration) throw new IllegalStateException("Frame is no longer stopped.");
+                            var request = new EvaluateArguments(); request.setExpression(expression);
+                            request.setFrameId(frame.getId()); request.setContext("hover");
+                            var result = await(dap.server.evaluate(request));
+                            if (running || generation != frameGeneration) throw new IllegalStateException("Frame is no longer stopped.");
+                            callback.evaluated(new XValue() {
+                                @Override public void computePresentation(@NotNull XValueNode node, @NotNull XValuePlace place) {
+                                    node.setPresentation(null, result.getType(), result.getResult(), result.getVariablesReference() != 0);
+                                }
+                                @Override public void computeChildren(@NotNull XCompositeNode node) {
+                                    loadChildren(result.getVariablesReference(), result.getNamedVariables(), node, frameGeneration);
+                                }
+                            });
+                        } catch (Exception error) {
+                            // Unsupported names are inspection errors, not fatal debug-session failures.
+                            callback.errorOccurred(Objects.toString(error.getMessage(), "Value is unavailable."));
+                        }
+                    });
+                }
+            };
+        }
         @Override public XSourcePosition getSourcePosition() {
             if (frame.getSource() == null || frame.getSource().getPath() == null || frame.getLine() < 1) return null;
             var file = LocalFileSystem.getInstance().findFileByPath(frame.getSource().getPath());
