@@ -10,7 +10,15 @@ the selected Debug ELF to a console waiting in Swiss. See [USB Gecko launching](
 **DolphinDotNet ELF launcher (BBA / USB Gecko)** adds receiver-readiness checks
 and acknowledged ELF execution through our console loader. See [setup](../../docs/console-launcher.md).
 
-Version 0.3.2 automatically lists COM / serial ports when a USB Gecko target is
+Version 0.3.3 adds read-only code hover for visible locals/arguments and instance
+fields, including unqualified private fields such as `length` in `SnakeGame`.
+Member paths such as `this.length` are supported; calls, indexers, assignments and
+general expression execution remain unsupported. Step Over now advances past all
+native addresses belonging to the current source statement instead of treating
+each address as another hit of the same breakpoint. Recursive and other source
+breakpoints still interrupt stepping.
+
+The plugin automatically lists COM / serial ports when a USB Gecko target is
 selected in **Manage targets…**. Choose a port from the dropdown or type its name;
 **Refresh** rescans after connecting a device and preserves your current choice.
 An empty list or discovery failure now explains what happened below the picker.

@@ -62,6 +62,10 @@ class AdapterIntegrationTest {
             var roots = client.server.variables(variables).get(5, TimeUnit.SECONDS).getVariables();
             assertEquals("box", roots[0].getName()); assertTrue(roots[0].getVariablesReference() > 0);
             assertEquals("\"Snake\"", roots[1].getValue()); assertEquals("null", roots[2].getValue());
+            var hover = new EvaluateArguments(); hover.setExpression("box.Count");
+            hover.setFrameId(frame.getId()); hover.setContext("hover");
+            var evaluated = client.server.evaluate(hover).get(5, TimeUnit.SECONDS);
+            assertEquals("7", evaluated.getResult()); assertEquals("System.Int32", evaluated.getType());
             variables.setVariablesReference(roots[0].getVariablesReference()); variables.setStart(0); variables.setCount(2);
             var fields = client.server.variables(variables).get(5, TimeUnit.SECONDS).getVariables();
             assertEquals(2, fields.length); assertEquals("Count", fields[0].getName()); assertEquals("7", fields[0].getValue());

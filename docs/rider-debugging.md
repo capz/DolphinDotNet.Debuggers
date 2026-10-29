@@ -312,8 +312,7 @@ locations and PowerPC register locations, including bounded DWARF location lists
 Values are decoded as big-endian Boolean, Char, signed/unsigned integers, native
 integers, Single or Double. Caller frames permit proven CFA-relative memory only;
 register-backed values are restricted to the top frame. Missing, ambiguous or
-unsupported locations display an explicit unavailable reason. No expression is
-evaluated to recover a value. Scope visibility uses verified DWARF statement
+unsupported locations display an explicit unavailable reason. Scope visibility uses verified DWARF statement
 ranges, including stops between line-row addresses. Ranges end at hidden rows,
 method boundaries and lexical scope boundaries; ambiguous source lines stay
 excluded. Location-list changes split ranges so inspection uses the location
@@ -341,7 +340,23 @@ on any execution. Member reads are lazy and validate the MEM1 bounds before
 reading; a well-framed target memory refusal becomes an unavailable value while
 other fields and the session stay usable. Corrupt transport responses still fail.
 
-Arrays, value-type expansion, static fields, properties, expressions and mutation
+Code hover supports visible variable names and instance-field paths, including
+unqualified private fields resolved through `this`. For example, `length` and
+`this.length` inspect the same field in `SnakeGame.SpawnFood`; visible locals take
+precedence over implicit fields. The adapter's `evaluate` request reads the same
+verified slots/layouts as Variables and rejects stale frames. Only bounded names
+and member paths are accepted; calls, operators, indexers and assignments never
+execute through this interface. Rider supplies a frame evaluator and extracts
+these paths from the identifier under the mouse.
+
+Snake's line 62 (`int remaining=Capacity-length;`) maps to several valid native
+addresses for one statement. Source stepping ignores the current statement's
+intermediate breakpoint addresses only while the same CFA activation is proven;
+breakpoints in recursive activations and other statements still win. A native
+Debug Snake run in Dolphin verified `length` and `this.length` as 4 at line 62,
+then a single Step Over reaching line 63 with `remaining` equal to 464.
+
+Arrays, value-type expansion, static fields, properties, general expressions and mutation
 remain unsupported. A struct field is explicitly unavailable; generic/unsupported
 runtime layouts are not expanded. No getter, `ToString`, allocation or other target
 code is invoked for inspection.
