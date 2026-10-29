@@ -41,9 +41,12 @@ public final class AttachRunner extends AsyncProgramRunner<RunnerSettings> {
         return result;
     }
     static RunContentDescriptor startSession(Project project, String name, java.util.Map<String,Object> args, @Nullable ExecutionEnvironment environment, Runnable cleanup) throws ExecutionException {
+        return startSession(project, name, args, environment, cleanup, null);
+    }
+    static RunContentDescriptor startSession(Project project, String name, java.util.Map<String,Object> args, @Nullable ExecutionEnvironment environment, Runnable cleanup, @Nullable Process emulator) throws ExecutionException {
         var builder = XDebuggerManager.getInstance(project).newSessionBuilder(new XDebugProcessStarter() {
             @Override public @NotNull XDebugProcess start(@NotNull XDebugSession session) throws ExecutionException {
-                return new RiderDebugProcess(session, AdapterCommand.create().createProcess(), args, cleanup);
+                return new RiderDebugProcess(session, AdapterCommand.create().createProcess(), args, cleanup, emulator);
             }
         }).sessionName(name).showTab(true);
         if (environment != null) builder.environment(environment);

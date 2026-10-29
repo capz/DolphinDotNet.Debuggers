@@ -27,7 +27,7 @@ public final class LaunchRunner extends AsyncProgramRunner<RunnerSettings> {
         var result = new AsyncPromise<RunContentDescriptor>();
         var configuration = (LaunchConfiguration)environment.getRunProfile();
         // Snapshot settings before leaving the UI thread; edits cannot change a build mid-flight.
-        var mode = configuration.mode; var file = configuration.projectFile(); var dolphin = configuration.dolphin;
+        var mode = configuration.mode; var file = configuration.projectFile(); var dolphin = configuration.dolphin; var name = configuration.getName();
         var target = mode.equals("target") ? LaunchConfiguration.firstTarget() : null;
         ProgressManager.getInstance().run(new Task.Backgroundable(environment.getProject(), "Building " + file.getFileName(), true) {
             @Override public void run(@NotNull ProgressIndicator indicator) {
@@ -68,9 +68,9 @@ public final class LaunchRunner extends AsyncProgramRunner<RunnerSettings> {
                                 handler.addProcessListener(new ProcessAdapter() { @Override public void processWillTerminate(@NotNull ProcessEvent event, boolean destroy) { stopEmulator(ownedEmulator); } });
                                 handler.startNotify(); result.setResult(descriptor);
                             } else {
-                                var descriptor = AttachRunner.startSession(environment.getProject(), configuration.getName(), args, environment, () -> {
+                                var descriptor = AttachRunner.startSession(environment.getProject(), name, args, environment, () -> {
                                     stopEmulator(ownedEmulator); connectionLease.close();
-                                });
+                                }, ownedEmulator);
                                 result.setResult(descriptor);
                             }
                         } catch (Exception e) { stopEmulator(ownedEmulator); if (connectionLease != null) connectionLease.close(); result.setError(e); }
@@ -82,6 +82,12 @@ public final class LaunchRunner extends AsyncProgramRunner<RunnerSettings> {
     }
     private static String runChecked(GeneralCommandLine command, ProgressIndicator indicator) throws ExecutionException {
         var handler = new CapturingProcessHandler(command);
+        handler.addProcessListener(new ProcessAdapter() {
+            @Override public void onTextAvailable(@NotNull ProcessEvent event, @NotNull com.intellij.openapi.util.Key outputType) {
+                var line = event.getText().strip();
+                if (!line.isEmpty()) indicator.setText2(line.length() > 200 ? line.substring(0, 200) : line);
+            }
+        });
         var output = handler.runProcessWithProgressIndicator(indicator);
         indicator.checkCanceled();
         if (output.getExitCode() != 0) throw new ExecutionException("Build preparation failed:\n" + output.getStdout() + output.getStderr());

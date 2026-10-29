@@ -24,5 +24,9 @@ class LaunchPlanTest {
         var args = LaunchPlan.build(Path.of("Snake.csproj"), "target", target);
         assertTrue(args.contains("-p:DndGdbIp=192.168.1.20")); assertTrue(args.contains("-p:DndGdbPort=3456"));
         assertThrows(IllegalArgumentException.class, () -> LaunchPlan.build(Path.of("Snake.csproj"), "target", null));
+        for (var invalid : new String[]{"localhost", "192.168.1.300", "192.168.1.2;OtherProperty=true"}) {
+            target.host = invalid;
+            assertThrows(IllegalArgumentException.class, () -> LaunchPlan.build(Path.of("Snake.csproj"), "target", target));
+        }
     }
 }
