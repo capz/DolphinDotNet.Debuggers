@@ -21,6 +21,8 @@ final class TargetDialog extends DialogWrapper {
     private final JBTextField host = new JBTextField();
     private final JSpinner port = new JSpinner(new SpinnerNumberModel(new TargetProfile().port, 1, 65535, 1));
     private final ComboBox<String> serial = new ComboBox<>();
+    private final JButton refresh = new JButton("Refresh");
+    private final JBLabel serialStatus = new JBLabel("Choose a detected port or type its name.");
     private final ComboBox<String> slot = new ComboBox<>(new String[]{"Slot A", "Slot B"});
     private final JSpinner baud = new JSpinner(new SpinnerNumberModel(115200, 1, Integer.MAX_VALUE, 1));
     private final JSpinner timeout = new JSpinner(new SpinnerNumberModel(10, 1, 120, 1));
@@ -30,6 +32,8 @@ final class TargetDialog extends DialogWrapper {
     private final JBLabel footer = new JBLabel();
     private TargetProfile editing;
     private boolean loading;
+    private boolean portsRequested, refreshing;
+    private volatile CapturingProcessHandler portProbe;
     private volatile boolean disposed;
     private String selectedId;
 
@@ -38,6 +42,7 @@ final class TargetDialog extends DialogWrapper {
         setTitle("Manage targets"); setOKButtonText("Save");
         TargetStore.getInstance().targets().forEach(model::addElement);
         serial.setEditable(true);
+        serial.setPrototypeDisplayValue("/dev/cu.usbserial-USBGecko");
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.addListSelectionListener(e -> { if (!e.getValueIsAdjusting()) select(); });
         type.addActionListener(e -> { if (!loading) { capture(); showTransport(); } });
@@ -47,7 +52,7 @@ final class TargetDialog extends DialogWrapper {
         if (!model.isEmpty()) list.setSelectedIndex(index); else showTransport();
     }
     @Override protected JComponent createCenterPanel() {
-        var add = new JButton(AllIcons.General.Add); add.setToolTipText("Add target");
+        var add = new JButton("Add target", AllIcons.General.Add);
         var remove = new JButton(AllIcons.General.Remove); remove.setToolTipText("Remove target");
         add.addActionListener(e -> {
             capture(); var t = new TargetProfile();
@@ -64,9 +69,9 @@ final class TargetDialog extends DialogWrapper {
         Forms.row(editor, 0, "Name:", name); Forms.row(editor, 1, "Connection type:", type);
         Forms.row(tcp, 0, "Host:", host); Forms.row(tcp, 1, "TCP port:", port);
         Forms.row(tcp, 2, "", new JBLabel("<html>Dolphin wait-for-Rider profile: 127.0.0.1:2166.<br>For consoles, use the address and port configured in the build.</html>"));
-        var refresh = new JButton("Refresh"); refresh.addActionListener(e -> refreshPorts(refresh));
-        Forms.row(usb, 0, "Serial port:", Forms.beside(serial, refresh));
-        Forms.row(usb, 1, "", new JBLabel("Choose the USB Gecko serial device on this computer."));
+        refresh.addActionListener(e -> refreshPorts());
+        Forms.row(usb, 0, "COM / serial port:", Forms.beside(serial, refresh));
+        Forms.row(usb, 1, "", serialStatus);
         Forms.row(usb, 2, "Expected console slot:", slot);
         Forms.row(usb, 3, "", new JBLabel("<html>Must match the debug build. This setting does not<br>change the running console.</html>"));
         var transport = new JPanel(); transport.setLayout(new BoxLayout(transport, BoxLayout.Y_AXIS)); transport.add(tcp); transport.add(usb);
@@ -114,25 +119,40 @@ final class TargetDialog extends DialogWrapper {
         editor.setVisible(editing != null);
         footer.setText("The target must already be running a " + (isUsb ? "USB Gecko" : "TCP") + " debug build.");
         if (editor.getParent() != null) editor.getParent().revalidate();
+        if (editing != null && isUsb && !portsRequested) refreshPorts();
     }
-    private void refreshPorts(JButton refresh) {
+    private void refreshPorts() {
+        if (refreshing || disposed) return;
+        portsRequested = true; refreshing = true;
         refresh.setEnabled(false);
+        serialStatus.setText("Finding COM / serial ports...");
         ApplicationManager.getApplication().executeOnPooledThread(() -> {
             String[] ports = null; String error = null;
             try {
-                var result = new CapturingProcessHandler(AdapterCommand.create("--list-serial-ports")).runProcess(15000);
+                var handler = new CapturingProcessHandler(AdapterCommand.create("--list-serial-ports"));
+                portProbe = handler;
+                if (disposed) handler.destroyProcess();
+                var result = handler.runProcess(15000);
                 if (result.isTimeout() || result.getExitCode() != 0) throw new IllegalStateException("Could not enumerate serial ports. " + result.getStderr());
                 ports = new Gson().fromJson(result.getStdout(), String[].class);
-                if (ports == null) throw new IllegalStateException("Invalid serial-port list from adapter.");
+                if (ports == null || Arrays.stream(ports).anyMatch(p -> p == null || p.isBlank()))
+                    throw new IllegalStateException("Invalid serial-port list from adapter.");
             } catch (Exception e) { error = e.getMessage(); }
+            finally { portProbe = null; }
             var found = ports; var failure = error;
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed) return;
+                refreshing = false;
                 refresh.setEnabled(true);
-                if (failure != null) { Messages.showErrorDialog(getContentPane(), failure, "Serial ports"); return; }
-                var value = serial.getEditor().getItem(); serial.removeAllItems();
-                for (var p : found) serial.addItem(p);
-                serial.getEditor().setItem(value); // Preserve manually entered Linux/macOS paths.
+                if (failure != null) {
+                    serialStatus.setText("Could not list ports. Type a port name or try Refresh.");
+                    serialStatus.setToolTipText(failure); return;
+                }
+                SerialPortSelection.update(serial, found);
+                serialStatus.setToolTipText(null);
+                serialStatus.setText(found.length == 0
+                    ? "No serial ports found. Connect the device and Refresh, or type a port name."
+                    : found.length + " serial ports found. Choose the USB Gecko port or type its name.");
             });
         });
     }
@@ -145,5 +165,9 @@ final class TargetDialog extends DialogWrapper {
         } catch (Exception e) { setErrorText(e.getMessage()); }
     }
     String selectedId() { return selectedId; }
-    @Override protected void dispose() { disposed = true; super.dispose(); }
+    @Override protected void dispose() {
+        disposed = true;
+        var handler = portProbe; if (handler != null) handler.destroyProcess();
+        super.dispose();
+    }
 }

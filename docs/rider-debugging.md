@@ -226,7 +226,7 @@ stored profiles intact.
 |---|---|---|
 | Name | Required | Required |
 | Host / TCP port | Required; match emulator/stub | Not sent |
-| Serial device | Not used | Required editable picker, with Refresh; COM5, /dev/ttyUSB0, /dev/cu.usbserial-* are examples |
+| COM / serial port | Not used | Automatically populated editable picker, with Refresh; COM5, /dev/ttyUSB0, /dev/cu.usbserial-* are examples |
 | Expected console slot | Not used | A/B build expectation only; B by default |
 | Response timeout | Advanced; 1–120 seconds, default 10 | Same |
 | Driver baud compatibility | Not used | Advanced; positive integer, provisional 115200 default |
@@ -234,9 +234,11 @@ stored profiles intact.
 USB opens the FTDI VCP using **8 data bits, no parity, 1 stop bit, no handshake**,
 matching the existing RSP backend. FT245 is a USB FIFO, so its driver baud setting
 is not an assertion of physical UART transfer speed. The compatibility default is
-not a tested hardware recommendation. Refresh runs the packaged adapter's
+not a tested hardware recommendation. Selecting USB Gecko automatically runs the packaged adapter's
 `--list-serial-ports` command, lists OS serial ports without claiming they are USB
-Geckos, and preserves manually entered paths. Driver installation, OS permissions
+Geckos, and preserves manually entered paths. Refresh rescans after connecting a
+device. No device is selected automatically; empty-list and discovery-error
+messages leave manual entry available. Driver installation, OS permissions
 and exclusive port access remain host prerequisites.
 
 The expected EXI slot does not go into DAP attach arguments. The DOL was built with
