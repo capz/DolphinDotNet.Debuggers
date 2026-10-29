@@ -3,6 +3,7 @@ package com.dolphindotnet.rider;
 import com.google.gson.Gson;
 import com.intellij.icons.AllIcons;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.*;
 import com.intellij.execution.process.CapturingProcessHandler;
@@ -98,7 +99,9 @@ final class TargetDialog extends DialogWrapper {
         capture(); editing = list.getSelectedValue(); loading = true;
         if (editing != null) {
             name.setText(editing.name); type.setSelectedIndex(editing.transport.equals("usbGecko") ? 1 : 0);
-            host.setText(editing.host); port.setValue(editing.port); serial.getEditor().setItem(editing.serialPort);
+            host.setText(editing.host); port.setValue(editing.port);
+            // Keep the popup selection and editable text in sync when switching targets.
+            serial.setSelectedItem(editing.serialPort);
             slot.setSelectedIndex(editing.expectedSlot.equals("A") ? 0 : 1); baud.setValue(editing.baudRate); timeout.setValue(editing.timeoutSeconds);
             heartbeatHost.setText(editing.heartbeatHost); heartbeatPort.setValue(editing.heartbeatPort);
         }
@@ -140,6 +143,8 @@ final class TargetDialog extends DialogWrapper {
             } catch (Exception e) { error = e.getMessage(); }
             finally { portProbe = null; }
             var found = ports; var failure = error;
+            // Only update this dialog's controls. Default NON_MODAL dispatch
+            // waits until DialogWrapper closes, leaving its picker empty.
             ApplicationManager.getApplication().invokeLater(() -> {
                 if (disposed) return;
                 refreshing = false;
@@ -151,9 +156,9 @@ final class TargetDialog extends DialogWrapper {
                 SerialPortSelection.update(serial, found);
                 serialStatus.setToolTipText(null);
                 serialStatus.setText(found.length == 0
-                    ? "No serial ports found. Connect the device and Refresh, or type a port name."
-                    : found.length + " serial ports found. Choose the USB Gecko port or type its name.");
-            });
+                    ? "No ports found. Connect the device and Refresh, or type a name."
+                    : found.length + " ports found. Choose a port or type its name.");
+            }, ModalityState.any());
         });
     }
     @Override protected void doOKAction() {

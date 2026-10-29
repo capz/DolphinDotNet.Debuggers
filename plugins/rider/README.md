@@ -14,6 +14,8 @@ Version 0.3.2 automatically lists COM / serial ports when a USB Gecko target is
 selected in **Manage targets…**. Choose a port from the dropdown or type its name;
 **Refresh** rescans after connecting a device and preserves your current choice.
 An empty list or discovery failure now explains what happened below the picker.
+Port scans and receiver-readiness checks update while their dialogs are open;
+previously the default UI dispatch waited for the modal dialog to close.
 Host upload progress and libogc2 bulk-register compatibility are also included.
 Copy the newly bundled launcher DOL to the console for the USB batching fix,
 footer progress bar and logo; updating the plugin alone does not update a running DOL.

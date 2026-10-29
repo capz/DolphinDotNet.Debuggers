@@ -241,6 +241,10 @@ device. No device is selected automatically; empty-list and discovery-error
 messages leave manual entry available. Driver installation, OS permissions
 and exclusive port access remain host prerequisites.
 
+Port discovery and readiness callbacks use an explicit modality state for updates
+to their own controls. Default non-modal dispatch would defer those callbacks
+until the attach/target dialog closed, leaving an empty picker or pending status.
+
 The expected EXI slot does not go into DAP attach arguments. The DOL was built with
 `DndGdbTransport=UsbGecko` and `DndGdbChannel=0` (slot A) or `1` (slot B); only a rebuild
 can change that. BBA subnet/gateway/initialization also belong to the target build,

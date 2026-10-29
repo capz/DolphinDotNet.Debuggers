@@ -2,6 +2,7 @@ package com.dolphindotnet.rider;
 
 import com.intellij.openapi.components.PathMacroManager;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.execution.process.CapturingProcessHandler;
 import com.google.gson.Gson;
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
@@ -143,11 +144,12 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
                 } catch (Exception error) { message=error.getMessage(); }
                 finally { probe=null; }
                 String text=message;
+                // Only update controls: the attach editor may be in a modal dialog.
                 ApplicationManager.getApplication().invokeLater(() -> {
                     if (disposed) return;
                     checking=false;checkReady.setEnabled(launchMode.getSelectedIndex()==2 && targets.getSelectedItem()!=null);
                     readiness.setText(revision==readinessRevision ? text : "Settings changed; check again.");
-                });
+                }, ModalityState.any());
             });
         } catch (Exception error) { readiness.setText(error.getMessage()); }
     }
