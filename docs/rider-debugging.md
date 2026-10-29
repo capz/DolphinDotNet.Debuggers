@@ -27,6 +27,12 @@ It polls the first saved target's ELF receiver every ten seconds while idle.
 checks share application-wide connection ownership, so polling cannot open the
 USB Gecko port during an upload or debug session. Hover over the status for details.
 
+An isolated Rider 262 startup check verified both status labels using a local
+receiver implementing the actual readiness handshake. It also exposed and fixed
+two startup issues: the widget must precede Rider's final Memory widget, and SDK
+detection must keep its cache in the project rather than shared VFS user data.
+This check does not establish physical USB Gecko or console readiness behavior.
+
 Game/sample build commands below refer to the [SDK repository](https://github.com/capz/DolphinDotNet), which owns the samples. Plugin and adapter build commands run in this repository.
 
 `plugins/rider` provides Run-menu attach, a saved target editor, and legacy attach

@@ -38,6 +38,7 @@ final class TargetStatusWidget implements StatusBarWidget, StatusBarWidget.TextP
                 var args = new LinkedHashMap<>(target.attachArguments());
                 args.put("launcherPort", 4299); args.put("readyTimeoutSeconds", 1); args.put("timeoutSeconds", 1);
                 var handler = new CapturingProcessHandler(AdapterCommand.create("--check-launcher", new Gson().toJson(args)));
+                lease.holdUntilExit(handler.getProcess());
                 probe = handler;
                 if (disposed) handler.destroyProcess();
                 try {

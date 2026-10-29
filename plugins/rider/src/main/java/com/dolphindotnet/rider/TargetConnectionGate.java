@@ -20,6 +20,12 @@ final class TargetConnectionGate {
     }
     static final class Lease implements AutoCloseable {
         private final AtomicBoolean closed = new AtomicBoolean();
-        @Override public void close() { if (closed.compareAndSet(false, true)) CONNECTION.release(); }
+        private java.util.concurrent.CompletableFuture<Process> ownerExit;
+        void holdUntilExit(Process process) { ownerExit = process.onExit(); }
+        @Override public void close() {
+            if (!closed.compareAndSet(false, true)) return;
+            if (ownerExit == null) CONNECTION.release();
+            else ownerExit.whenComplete((process, error) -> CONNECTION.release());
+        }
     }
 }

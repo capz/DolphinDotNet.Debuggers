@@ -61,5 +61,6 @@ tasks.test {
     inputs.dir(adapterOutput)
     systemProperty("dnd.adapter", adapterOutput.get().file("DolphinDotNet.DebugAdapter.dll").asFile.absolutePath)
     systemProperty("dnd.repositoryRoot", rootDir.resolve("../..").canonicalPath)
+    systemProperty("dnd.testClasses", sourceSets.test.get().output.classesDirs.asPath)
     systemProperty("dnd.python", System.getenv("PYTHON") ?: "python3")
 }

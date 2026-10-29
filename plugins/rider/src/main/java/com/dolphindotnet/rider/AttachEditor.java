@@ -136,6 +136,7 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
                 try (var lease=TargetConnectionGate.tryProbe()) {
                     if (lease==null) throw new IllegalStateException("Target connection is in use. Stop debugging before checking readiness.");
                     var handler=new CapturingProcessHandler(command);probe=handler;
+                    lease.holdUntilExit(handler.getProcess());
                     if (disposed) handler.destroyProcess();
                     com.intellij.execution.process.ProcessOutput result;
                     try { result=handler.runProcess(10000); }
