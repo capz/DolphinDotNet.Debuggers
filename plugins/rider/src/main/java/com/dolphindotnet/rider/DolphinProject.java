@@ -2,9 +2,6 @@ package com.dolphindotnet.rider;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.openapi.vfs.VfsUtilCore;
-import com.intellij.psi.util.CachedValueProvider;
-import com.intellij.psi.util.CachedValuesManager;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import java.io.StringReader;
@@ -12,6 +9,9 @@ import java.io.StringReader;
 final class DolphinProject {
     private DolphinProject() { }
     static boolean isProject(Project project) {
+        return com.intellij.openapi.application.ReadAction.compute(() -> isProjectUnderReadAction(project));
+    }
+    private static boolean isProjectUnderReadAction(Project project) {
         if (project.isDisposed() || project.getBasePath() == null) return false;
         var root = com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByPath(project.getBasePath());
         if (root == null) return false;
@@ -28,11 +28,7 @@ final class DolphinProject {
             for (var child : directory.getChildren()) {
                 if (!child.isDirectory() && "csproj".equalsIgnoreCase(child.getExtension())) {
                     projectDirectory = true;
-                    boolean usesSdk = CachedValuesManager.getManager(project).getCachedValue(child, () -> {
-                        boolean found = false;
-                        try { found = usesSdk(VfsUtilCore.loadText(child)); } catch (Exception ignored) { }
-                        return CachedValueProvider.Result.create(found, child);
-                    });
+                    boolean usesSdk = project.getService(DolphinProjectCache.class).usesSdk(child);
                     if (usesSdk) return true;
                 }
             }
