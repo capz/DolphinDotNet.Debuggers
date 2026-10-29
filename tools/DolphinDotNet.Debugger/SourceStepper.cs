@@ -59,6 +59,19 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             if (mode != StepMode.Into && !originCfa.HasValue) return new(current, origin, SourceStepReason.UnwindUnavailable, 0);
         }
         var enteredSameSourceCallee = false;
+        RspStop? inspectedStop = null;
+        uint? inspectedCfa = null;
+        async Task<uint?> ReadStepCfaAsync(RspStop stop)
+        {
+            // Reuse the observation only for this exact stopped event. A later
+            // recursive stop can have the same PC but a different activation.
+            if (!ReferenceEquals(inspectedStop, stop))
+            {
+                inspectedCfa = await unwinder.ReadCanonicalFrameAddressAsync(stop.ProgramCounter!.Value, token).ConfigureAwait(false);
+                inspectedStop = stop;
+            }
+            return inspectedCfa;
+        }
         async Task<bool> HitDistinctBreakpointAsync(RspStop stop, IReadOnlyList<SourceLocation> locations)
         {
             if (breakpointHit?.Invoke(stop.ProgramCounter!.Value) != true) return false;
@@ -67,7 +80,7 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
             // Prove the activation as well: recursion at the same line must stop.
             if (locations.Count == 1 && locations[0] == origin && originCfa.HasValue)
             {
-                var activation = await unwinder.ReadCanonicalFrameAddressAsync(stop.ProgramCounter.Value, token).ConfigureAwait(false);
+                var activation = await ReadStepCfaAsync(stop).ConfigureAwait(false);
                 if (activation == originCfa) return false;
             }
             return true;
@@ -99,7 +112,7 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
                 // share both the original source line and native address.
                 if (locations.Count == 1 && locations[0] == origin)
                 {
-                    var calleeCfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
+                    var calleeCfa = await ReadStepCfaAsync(current).ConfigureAwait(false);
                     enteredSameSourceCallee |= calleeCfa < originCfa;
                 }
                 current = await ReadProgramCounterAsync(await continueTo!(returnPc, token).ConfigureAwait(false), token).ConfigureAwait(false);
@@ -121,13 +134,13 @@ public sealed class SourceStepper(RspClient client, SourceAddressMap symbols, Fu
                 // distinguishes the activation; source-line equality cannot.
                 if (originCfa.HasValue)
                 {
-                    var activation = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
+                    var activation = await ReadStepCfaAsync(current).ConfigureAwait(false);
                     if (activation.HasValue && activation != originCfa)
                         return new(current, locations[0], SourceStepReason.SourceLocation, count);
                 }
                 continue;
             }
-            var cfa = await unwinder.ReadCanonicalFrameAddressAsync(current.ProgramCounter.Value, token).ConfigureAwait(false);
+            var cfa = await ReadStepCfaAsync(current).ConfigureAwait(false);
             if (!cfa.HasValue) return new(current, locations[0], SourceStepReason.UnwindUnavailable, count);
             enteredSameSourceCallee |= cfa < originCfa && locations[0] == origin;
             // A recursive call can return to the same source identity. Ordinary

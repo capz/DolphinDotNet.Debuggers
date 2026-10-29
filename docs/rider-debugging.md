@@ -349,6 +349,13 @@ and member paths are accepted; calls, operators, indexers and assignments never
 execute through this interface. Rider supplies a frame evaluator and extracts
 these paths from the identifier under the mouse.
 
+Snake's line 62 (`int remaining=Capacity-length;`) maps to several valid native
+addresses for one statement. Source stepping ignores the current statement's
+intermediate breakpoint addresses only while the same CFA activation is proven;
+breakpoints in recursive activations and other statements still win. A native
+Debug Snake run in Dolphin verified `length` and `this.length` as 4 at line 62,
+then a single Step Over reaching line 63 with `remaining` equal to 464.
+
 Arrays, value-type expansion, static fields, properties, general expressions and mutation
 remain unsupported. A struct field is explicitly unavailable; generic/unsupported
 runtime layouts are not expanded. No getter, `ToString`, allocation or other target

@@ -21,6 +21,7 @@ class HoverExpressionTest {
         for (String expression : new String[]{"GetBox().length", "boxes[0].length", ".length"})
             assertNull(HoverExpression.at(expression, expression.length() - 2));
         assertNull(HoverExpression.at("GetLength()", 3));
+        assertNull(HoverExpression.at("GetLength ()", 3));
         assertNull(HoverExpression.at("length + 1", 7));
         assertNull(HoverExpression.at("length", -1));
         assertNull(HoverExpression.at("length", 6));

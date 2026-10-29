@@ -308,13 +308,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                     var value = isScope
                         ? await inspector.ReadAsync(scope.Variables[index], scope.Frame.Frame, scope.Frame.TopFrame, _lifetime.Token)
                         : await inspector.ReadFieldAsync(view!, view!.Layout.Fields[index], _lifetime.Token);
-                    var children = 0;
-                    if (value.Children is not null && _objectViews.Count < 4096)
-                    {
-                        children = ++_nextVariable;
-                        _objectViews.Add(children, value.Children);
-                    }
-                    var display = value.Children is not null && children == 0 ? value.Value + " <inspection handle limit>" : value.Value;
+                    var (children, display) = RegisterInspection(value);
                     values.Add(new { name = value.Name, type = value.Type, value = display, variablesReference = children,
                         namedVariables = children == 0 ? 0 : ChildCount(value.Children!.Layout.Fields.Count),
                         presentationHint = new { attributes = new[] { "readOnly" }, kind = "data" } });
@@ -327,13 +321,8 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
                 var inspected = await new ReadOnlyExpressionInspector(_client, _symbols).ReadAsync(
                     args.GetProperty("expression").GetString() ?? "", evaluationFrame.Frame,
                     evaluationFrame.TopFrame, evaluationFrame.Lookup, _lifetime.Token);
-                var childReference = 0;
-                if (inspected.Children is not null && _objectViews.Count < 4096)
-                {
-                    childReference = ++_nextVariable;
-                    _objectViews.Add(childReference, inspected.Children);
-                }
-                await connection.RespondAsync(request, new { result = inspected.Value, type = inspected.Type,
+                var (childReference, evaluationDisplay) = RegisterInspection(inspected);
+                await connection.RespondAsync(request, new { result = evaluationDisplay, type = inspected.Type,
                     variablesReference = childReference,
                     namedVariables = childReference == 0 ? 0 : ChildCount(inspected.Children!.Layout.Fields.Count),
                     presentationHint = new { attributes = new[] { "readOnly" } } });
@@ -458,6 +447,14 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
 
     private int ChildCount(int count) => !_variablePaging && count > ObjectInspector.MaximumPageSize
         ? (count + ObjectInspector.MaximumPageSize - 1) / ObjectInspector.MaximumPageSize : count;
+    private (int Reference, string Display) RegisterInspection(InspectedValue value)
+    {
+        if (value.Children is null) return (0, value.Value);
+        if (_objectViews.Count >= 4096) return (0, value.Value + " <inspection handle limit>");
+        var reference = ++_nextVariable;
+        _objectViews.Add(reference, value.Children);
+        return (reference, value.Value);
+    }
     private object BreakpointBody(BreakpointRegistry.Entry entry) => new {
         id = entry.Id, verified = entry.Error is null, line = entry.Line - 1 + _lineBase, message = entry.Error };
 

@@ -8,7 +8,9 @@ final class HoverExpression {
         int start = offset, end = offset + 1;
         while (start > 0 && part(text.charAt(start - 1))) start--;
         while (end < text.length() && part(text.charAt(end))) end++;
-        if (end < text.length() && text.charAt(end) == '(') return null;
+        int following = end;
+        while (following < text.length() && horizontalSpace(text.charAt(following))) following++;
+        if (following < text.length() && text.charAt(following) == '(') return null;
         while (true) {
             int dot = start - 1;
             while (dot >= 0 && horizontalSpace(text.charAt(dot))) dot--;
