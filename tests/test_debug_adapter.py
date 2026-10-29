@@ -328,6 +328,47 @@ class AdapterTests(unittest.TestCase):
         return self.client.request("setBreakpoints", dict(source=dict(path="/local/日本/" + path),
             breakpoints=[dict(line=line) for line in lines]))["body"]["breakpoints"]
 
+    def test_automatic_continue_waits_until_breakpoints_are_configured(self):
+        self.attach(configured=False, heartbeat=dict(stopOnEntry=False))
+        self.assertNotIn('c', self.target.commands)
+        self.assertTrue(self.bp(lines=(11,))[0]['verified'])
+        self.client.request('configurationDone')
+        self.client.event('continued')
+        self.assertEqual('breakpoint', self.client.event('stopped')['reason'])
+        frame = self.client.request('stackTrace', dict(threadId=1))['body']['stackFrames'][0]
+        self.assertEqual(11, frame['line'])
+        self.assertFalse(any(e.get('event') == 'stopped' and e.get('body', {}).get('reason') == 'entry' for e in self.client.events))
+
+    def test_automatic_dolphin_connection_waits_for_a_late_listener(self):
+        self.target = Target()
+        real_port = self.target.port
+        # A small relay begins listening after the adapter has tried the closed port.
+        with socket.socket() as free:
+            free.bind(('127.0.0.1', 0))
+            port = free.getsockname()[1]
+        errors = []
+        def relay():
+            try:
+                time.sleep(.35)
+                with socket.socket() as listener:
+                    listener.bind(('127.0.0.1', port)); listener.listen()
+                    peer, _ = listener.accept()
+                    with peer, socket.create_connection(('127.0.0.1', real_port)) as target:
+                        while True:
+                            ready, _, _ = select.select([peer, target], [], [], 5)
+                            if not ready: return
+                            for src in ready:
+                                data = src.recv(4096)
+                                if not data: return
+                                (target if src is peer else peer).sendall(data)
+            except Exception as error: errors.append(error)
+        thread = threading.Thread(target=relay, daemon=True); thread.start()
+        self.client.request('attach', dict(host='127.0.0.1', port=port, connectTimeoutSeconds=3,
+            elf=str(self.elf), sourceMap=str(self.source), addressMap=str(self.address)))
+        self.client.event('initialized')
+        self.client.request('disconnect'); thread.join(2)
+        self.assertFalse(thread.is_alive()); self.assertEqual([], errors)
+
     def test_breakpoint_changes_while_running_wait_for_stop_and_report_verification(self):
         self.attach()
         self.client.request('continue', dict(threadId=1))

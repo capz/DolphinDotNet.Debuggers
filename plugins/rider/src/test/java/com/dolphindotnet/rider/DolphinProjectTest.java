@@ -6,6 +6,11 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 class DolphinProjectTest {
+    @Test void recognizesActualPackageAndProjectReferencesOnly() {
+        assertTrue(DolphinProject.usesSdk("<Project><ItemGroup><PackageReference Include='DolphinDotNet.Core' Version='1'/></ItemGroup></Project>"));
+        assertTrue(DolphinProject.usesSdk("<Project><ItemGroup><ProjectReference Include='../../DolphinDotNet.Graphics/DolphinDotNet.Graphics.csproj'/></ItemGroup></Project>"));
+        assertFalse(DolphinProject.usesSdk("<Project><ItemGroup><PackageReference Include='OtherDolphinDotNet.Core'/></ItemGroup></Project>"));
+    }
     @Test void recognizesSdkAttributesAndVersionedSdkElements() {
         assertTrue(DolphinProject.usesSdk("<Project Sdk='DolphinDotNet.Sdk'/>"));
         assertTrue(DolphinProject.usesSdk("<Project Sdk='Other; DolphinDotNet.Sdk/1.0'/>"));

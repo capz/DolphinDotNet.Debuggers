@@ -133,10 +133,14 @@ final class AttachEditor extends SettingsEditor<AttachConfiguration> {
             int revision=readinessRevision;checking=true;checkReady.setEnabled(false);readiness.setText("Waiting for receiver...");
             ApplicationManager.getApplication().executeOnPooledThread(() -> {
                 String message;
-                try {
+                try (var lease=TargetConnectionGate.tryProbe()) {
+                    if (lease==null) throw new IllegalStateException("Target connection is in use. Stop debugging before checking readiness.");
                     var handler=new CapturingProcessHandler(command);probe=handler;
+                    lease.holdUntilExit(handler.getProcess());
                     if (disposed) handler.destroyProcess();
-                    var result=handler.runProcess(10000);
+                    com.intellij.execution.process.ProcessOutput result;
+                    try { result=handler.runProcess(10000); }
+                    finally { handler.destroyProcess();handler.waitFor(1000); }
                     if (result.isTimeout()) throw new IllegalStateException("Receiver check timed out.");
                     var reply=new Gson().fromJson(result.getStdout(),ProbeStatus.class);
                     if (reply==null || reply.message==null) throw new IllegalStateException("Invalid receiver status. " + result.getStderr());

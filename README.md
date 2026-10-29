@@ -16,8 +16,9 @@ or successful Actions artifacts. Build your game using DolphinDotNet.Sdk; these
 extensions attach using the resulting ELF and matching debug metadata, and can
 optionally upload the ELF through Swiss/USB Gecko or our GameCube BBA/USB receiver
 before attaching. The latter mode checks readiness and validates the transfer
-before requesting execution. They do not
-compile games or start a CLR on the console. Existing extension IDs and debugger
+before requesting execution. Rider 0.4.0 also provides automatic build/run/debug
+configurations for local Dolphin and the first saved hardware target, with a
+project-specific GameCube readiness indicator. Games run native code on the console. Existing extension IDs and debugger
 protocols are unchanged.
 
 For BBA or USB Gecko uploads, choose **DolphinDotNet ELF launcher** and use

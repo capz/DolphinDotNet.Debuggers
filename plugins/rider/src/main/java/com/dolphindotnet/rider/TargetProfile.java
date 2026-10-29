@@ -2,7 +2,7 @@ package com.dolphindotnet.rider;
 
 import java.util.*;
 
-/** Machine-local connection settings. EXI slot is informational build metadata. */
+/** Machine-local connection settings. Automatic hardware builds use the selected EXI slot. */
 public final class TargetProfile {
     public String id = UUID.randomUUID().toString();
     public String name = "New target";

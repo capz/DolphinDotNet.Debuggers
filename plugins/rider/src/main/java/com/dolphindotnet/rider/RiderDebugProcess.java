@@ -30,6 +30,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     private final Map<Integer, XLineBreakpoint<SourceBreakpointProperties>> breakpointIds = new HashMap<>();
     private final AtomicBoolean ended = new AtomicBoolean();
     private final ProcessHandler handler;
+    private final Process emulator;
     private volatile boolean ready, running;
     private volatile long generation;
     private final XBreakpointHandler<XLineBreakpoint<SourceBreakpointProperties>> breakpointHandler = new XBreakpointHandler<>(SourceBreakpointType.class) {
@@ -40,8 +41,11 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
             breakpoints.remove(breakpoint); updateBreakpoints();
         }
     };
-    RiderDebugProcess(XDebugSession session, Process process, Map<String, Object> arguments) {
-        super(session); this.arguments = arguments;
+    RiderDebugProcess(XDebugSession session, Process process, Map<String, Object> arguments, Runnable cleanup, Process emulator) {
+        super(session); this.arguments = arguments; this.emulator = emulator;
+        // DAP disconnect is asynchronous. Retain port ownership until the OS has
+        // actually closed the adapter process, including all failure paths.
+        process.onExit().thenRun(cleanup);
         handler = new ProcessHandler() {
             { process.onExit().thenRun(() -> notifyProcessTerminated(process.exitValue())); }
             @Override protected void destroyProcessImpl() { stop(); }
@@ -64,6 +68,17 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
         };
     }
     @Override public void sessionInitialized() {
+        if (emulator != null) {
+            var emulatorHandler = new OSProcessHandler(emulator, "DolphinDotNet emulator", java.nio.charset.StandardCharsets.UTF_8);
+            getSession().getConsoleView().attachToProcess(emulatorHandler);
+            emulatorHandler.addProcessListener(new ProcessAdapter() {
+                @Override public void processTerminated(@NotNull ProcessEvent event) {
+                    if (event.getExitCode() != 0) output("Dolphin launch exited with code " + event.getExitCode() + ".\n", true);
+                    stop();
+                }
+            });
+            emulatorHandler.startNotify();
+        }
         submit(() -> {
             dap.start(arguments).get(355, TimeUnit.SECONDS); ready = true; syncBreakpoints();
             await(dap.server.configurationDone(new ConfigurationDoneArguments()));

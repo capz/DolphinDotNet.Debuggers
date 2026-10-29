@@ -1,5 +1,38 @@
 # Rider attach debugging (A6 / bounded A7 inspection)
 
+## Automatic sample launch actions (0.4.0)
+
+Open a solution from [DolphinDotNet.Samples](https://github.com/capz/DolphinDotNet.Samples).
+Its three shared configurations are **Run in emulator** (Run), **Debug on emulator**
+(Debug), and **Debug on target** (Debug). The plugin builds through the SDK itself,
+then starts the emulator or uploads the ELF. Debug actions install source
+breakpoints before continuing automatically. Existing manual attach remains available.
+
+Emulator actions override console GDB settings with `DndGdbTransport=Off`.
+Emulator debugging uses an automatically chosen loopback TCP port and the SDK's
+separate waiting Dolphin profile, regardless of the first saved hardware target.
+Set `DOLPHIN_PATH`, the SDK's local `DolphinPath`, or the configuration's optional
+Dolphin executable. Stopping the session closes the emulator it launched.
+
+Hardware debugging snapshots the first saved target before building. It selects
+USB Gecko's expected slot or the console's TCP address/GDB port, then uploads to
+the resident ELF launcher on port 4299. Configure nondefault TCP netmask/gateway
+through the SDK's local properties. Boot the bundled launcher on the console
+first. Stopping hardware debugging leaves the game running.
+
+The GameCube status-bar widget appears in projects referencing DolphinDotNet.
+It polls the first saved target's ELF receiver every ten seconds while idle.
+**Target GameCube available** means the receiver answered a readiness handshake;
+**Target GameCube not available** means it did not. Debugging and manual readiness
+checks share application-wide connection ownership, so polling cannot open the
+USB Gecko port during an upload or debug session. Hover over the status for details.
+
+An isolated Rider 262 startup check verified both status labels using a local
+receiver implementing the actual readiness handshake. It also exposed and fixed
+two startup issues: the widget must precede Rider's final Memory widget, and SDK
+detection must keep its cache in the project rather than shared VFS user data.
+This check does not establish physical USB Gecko or console readiness behavior.
+
 Game/sample build commands below refer to the [SDK repository](https://github.com/capz/DolphinDotNet), which owns the samples. Plugin and adapter build commands run in this repository.
 
 `plugins/rider` provides Run-menu attach, a saved target editor, and legacy attach
