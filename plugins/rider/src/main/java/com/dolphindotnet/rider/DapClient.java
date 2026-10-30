@@ -67,7 +67,13 @@ final class DapClient implements AutoCloseable {
         startup = server.initialize(init).orTimeout(Math.min(15000, requestMillis), TimeUnit.MILLISECONDS)
             .thenCompose(capabilities -> ("launch".equals(arguments.get("request")) ? server.launch(arguments) : server.attach(arguments)).orTimeout(requestMillis, TimeUnit.MILLISECONDS))
             .thenCompose(ignored -> initialized.orTimeout(requestMillis, TimeUnit.MILLISECONDS));
-        startup.whenComplete((ignored, error) -> { if (error != null) close(); });
+        startup.whenComplete((ignored, error) -> {
+            if (error != null) {
+                listener.output("DolphinDotNet debugger startup failed before DAP initialization: " +
+                    (error.getCause() != null ? error.getCause().toString() : error.toString()) + "\n", true);
+                close();
+            }
+        });
         return startup;
     }
     private void notifyTerminated() { if (!closing.get() && notified.compareAndSet(false, true)) listener.terminated(); }

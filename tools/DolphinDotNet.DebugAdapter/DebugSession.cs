@@ -32,6 +32,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private bool _variablePaging;
     private int _nextVariable;
     private bool _telemetryReported;
+    private bool _startupDiagnostics;
     private DebugHeartbeat? _heartbeat;
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -98,6 +99,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_execution is { IsCompleted: false }) throw new InvalidOperationException("Previous target is still shutting down.");
             Interlocked.Exchange(ref _terminated, 0);
             _telemetryReported = false;
+            _startupDiagnostics = command == "launch";
             _configured = false;
             _stopOnEntry = !args.TryGetProperty("stopOnEntry", out var stopOnEntry) || stopOnEntry.GetBoolean();
             int connectSeconds = args.TryGetProperty("connectTimeoutSeconds", out var connectTimeout) ? connectTimeout.GetInt32() : 0;
@@ -136,17 +138,24 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             timeout.CancelAfter(connectSeconds > 0 ? TimeSpan.FromSeconds(connectSeconds) : transport.Timeout);
             try
             {
+                await StartupStatusAsync("Connecting to GDB transport");
                 _client = transport.Kind == "usbGecko"
                     ? RspClient.ConnectUsbGecko(transport.SerialPort!, transport.BaudRate, transport.Timeout)
                     : await ConnectTcpAsync(transport, connectSeconds > 0, timeout.Token);
+                await StartupStatusAsync("GDB transport connected; querying initial stop");
                 _stop = await new SourceStepper(_client, _symbols).ReadProgramCounterAsync(await _client.QueryStopAsync());
+                await StartupStatusAsync("GDB initial stop received");
                 if (_stop.Exited) throw new InvalidOperationException("Target has exited.");
                 _breakpoints = new BreakpointRegistry(_client, () => _pauseRequested);
-                await ReportDebuggerTelemetryAsync(true);
-                await ConfigureHeartbeatAsync(heartbeat);
+                await StartupStatusAsync("Checking optional debugger overlay");
+                await OptionalStartupAsync("overlay telemetry", () => ReportDebuggerTelemetryAsync(true));
+                await StartupStatusAsync("Checking optional debugger heartbeat");
+                await OptionalStartupAsync("heartbeat configuration", () => ConfigureHeartbeatAsync(heartbeat));
+                await StartupStatusAsync("GDB ready; completing DAP launch");
             }
             catch (Exception error)
             {
+                await StartupStatusAsync("GDB startup failed: " + error.Message);
                 await StopHeartbeatAsync();
                 if (_client is not null) await _client.DisposeAsync();
                 _client = null;
@@ -156,6 +165,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             }
             await connection.RespondAsync(request);
             await connection.EventAsync("initialized");
+            await StartupStatusAsync("DAP initialized; waiting for Rider breakpoint configuration");
             return;
         }
         if (_client is null || _symbols is null || _breakpoints is null)
@@ -504,6 +514,25 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_client is not null) await _client.DisposeAsync();
             if (_execution is not null) { try { await _execution; } catch { } }
             _client = null;
+        }
+    }
+
+    private Task StartupStatusAsync(string step)
+        => !_startupDiagnostics ? Task.CompletedTask : connection.EventAsync("output", new { category = "console", output = "[target startup] " + step + "\n" });
+
+    private async Task OptionalStartupAsync(string name, Func<Task> operation)
+    {
+        try
+        {
+            // Optional telemetry must not prevent a usable GDB/DAP session.
+            // RSP commands already have bounded timeouts. Do not abandon a command
+            // while it owns the RSP stream, or subsequent packets may desynchronize.
+            await operation();
+        }
+        catch (Exception error) when (error is not OperationCanceledException || !_lifetime.IsCancellationRequested)
+        {
+            await connection.EventAsync("output", new { category = "console",
+                output = "[target startup] Skipping optional " + name + ": " + error.Message + "\n" });
         }
     }
 
