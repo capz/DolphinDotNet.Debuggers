@@ -32,6 +32,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     private final ProcessHandler handler;
     private final Process emulator;
     private volatile boolean ready, running;
+    private volatile boolean refreshingBreakpoints, userPauseRequested;
     private volatile long generation;
     private final XBreakpointHandler<XLineBreakpoint<SourceBreakpointProperties>> breakpointHandler = new XBreakpointHandler<>(SourceBreakpointType.class) {
         @Override public void registerBreakpoint(@NotNull XLineBreakpoint<SourceBreakpointProperties> breakpoint) {
@@ -99,7 +100,21 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     }
     private void updateBreakpoints() {
         if (ended.get()) return;
-        submit(() -> { if (ready && !running) syncBreakpoints(); });
+        submit(() -> {
+            if (!ready) return;
+            if (!running) {
+                syncBreakpoints();
+            } else {
+                // A running RSP target cannot safely accept native breakpoint
+                // patches. Interrupt it, install the desired set, then resume.
+                if (refreshingBreakpoints) return;
+                refreshingBreakpoints = true;
+                output("[Rider] Pausing target briefly to apply updated breakpoints.\n", false);
+                var args = new PauseArguments(); args.setThreadId(1);
+                try { await(dap.server.pause(args)); }
+                catch (Exception error) { refreshingBreakpoints = false; throw error; }
+            }
+        });
     }
     private void syncBreakpoints() throws Exception {
         var desired = new LinkedHashMap<String, List<XLineBreakpoint<SourceBreakpointProperties>>>();
@@ -132,6 +147,17 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
         running = false; long stopGeneration = ++generation;
         submit(() -> {
             if (!ready) return;
+            if (refreshingBreakpoints && !userPauseRequested) {
+                refreshingBreakpoints = false;
+                syncBreakpoints();
+                output("[Rider] Updated breakpoints applied; resuming target.\n", false);
+                var resume = new ContinueArguments(); resume.setThreadId(1);
+                running = true;
+                await(dap.server.continue_(resume));
+                return;
+            }
+            refreshingBreakpoints = false;
+            userPauseRequested = false;
             syncBreakpoints();
             var request = new StackTraceArguments(); request.setThreadId(1);
             var frames = await(dap.server.stackTrace(request)).getStackFrames();
@@ -155,11 +181,14 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
     @Override public void terminated() { stop(); }
     @Override public void stop() {
         if (!ended.compareAndSet(false, true)) return;
+        refreshingBreakpoints = false; userPauseRequested = false;
         ++generation; commands.shutdownNow(); dap.close(); ui(() -> getSession().stop());
     }
     @Override public boolean checkCanPerformCommands() { return ready && !ended.get(); }
     @Override public void startPausing() {
         if (!ready || !running) return;
+        userPauseRequested = true;
+        if (refreshingBreakpoints) return;
         submit(() -> { var args = new PauseArguments(); args.setThreadId(1); await(dap.server.pause(args)); });
     }
     @Override public void resume(@Nullable XSuspendContext context) { execute("continue"); }
