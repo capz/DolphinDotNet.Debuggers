@@ -80,7 +80,7 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
             emulatorHandler.startNotify();
         }
         submit(() -> {
-            output("[Rider startup] Waiting for DAP launch and initialized event.\\n", false);
+            output("[Rider startup] Waiting for DAP launch and initialized event.\n", false);
             dap.start(arguments).get(355, TimeUnit.SECONDS);
             output("[Rider startup] DAP initialized event received.\n", false);
             ready = true;
