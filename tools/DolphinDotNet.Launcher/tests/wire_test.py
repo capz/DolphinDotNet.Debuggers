@@ -23,13 +23,24 @@ def run(peer, image):
     nonce = 0x12345678
     crc = zlib.crc32(image)
     hello = frame(1, nonce)
-    ready = frame(2, nonce, 16*1024*1024-4096)
+    ready = frame(2, nonce, (16*1024*1024-4096) | 0x80000000)
     def request(data, success=True):
         result = subprocess.run([str(peer.resolve())], input=data, capture_output=True, timeout=10)
         assert result.returncode == (0 if success else 1), result.stderr
         return result
     probe = request(hello+frame(8, nonce))
     assert probe.stdout == ready and b'VALIDATED' not in probe.stderr
+    compressed = zlib.compress(image, level=9)
+    if len(compressed) < len(image):
+        upload_zlib = hello+frame(10, len(image), crc)+struct.pack('>I', len(compressed))+compressed
+        compressed_good = request(upload_zlib+frame(5, nonce)+frame(9, nonce))
+        assert compressed_good.stdout == ready+frame(4, len(image), crc)+frame(6, nonce)
+        assert b'VALIDATED entry=' in compressed_good.stderr
+        assert request(upload_zlib[:-1], False).stdout == ready
+        corrupted = bytearray(compressed)
+        corrupted[0] ^= 0xff
+        assert request(hello+frame(10, len(image), crc)+struct.pack('>I', len(corrupted))+corrupted, False).stdout == ready+frame(7, 6)
+        assert request(hello+frame(10, len(image), crc)+struct.pack('>I', 0), False).stdout == ready+frame(7, 6)
     upload = hello+frame(3, len(image), crc)+image
     good = request(upload+frame(5, nonce)+frame(9, nonce))
     assert good.stdout == ready+frame(4, len(image), crc)+frame(6, nonce)
@@ -41,7 +52,7 @@ def run(peer, image):
     assert request(hello+frame(3, len(image), crc ^ 1)+image, False).stdout == ready+frame(7, 3)
     assert request(hello+frame(3, 0xffffffff, 0), False).stdout == ready+frame(7, 2)
     assert request(hello+frame(3, len(image), crc)+image[:-1], False).stdout == ready
-    print(f'Production C receiver: probe/cancel, {len(image)}-byte ELF, validated execute, rejection and truncation vectors passed.')
+    print(f'Production C receiver: compressed and legacy upload, probe/cancel, {len(image)}-byte ELF, validated execute, rejection and truncation vectors passed.')
 
 
 if __name__ == '__main__':
