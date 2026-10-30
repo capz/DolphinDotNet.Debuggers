@@ -1,6 +1,6 @@
 #include "protocol.h"
 #include <string.h>
-#include <zlib.h>
+#include "zlib_decode.h"
 
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0]<<24 | (uint32_t)p[1]<<16 | (uint32_t)p[2]<<8 | p[3]; }
 static void put32(uint8_t *p, uint32_t v) { p[0]=(uint8_t)(v>>24); p[1]=(uint8_t)(v>>16); p[2]=(uint8_t)(v>>8); p[3]=(uint8_t)v; }
@@ -73,8 +73,7 @@ int dnd_launcher_session(DndLauncherIo *io, uint8_t **image, DndElfPlan *plan) {
     if (io->status) io->status(io->context,DND_UPLOAD);
     if (!receive_image(io,compressed ? buffer+length : buffer,wire_length)) return -1;
     if (compressed) {
-        uLongf decoded=length;
-        if (uncompress(buffer,&decoded,buffer+length,wire_length)!=Z_OK || decoded!=length)
+        if (dnd_zlib_decode(buffer,length,buffer+length,wire_length)!=0)
             return reject(io,DND_BAD_COMPRESSION);
     }
     if (dnd_launcher_crc32(buffer,length)!=crc) return reject(io,DND_BAD_CRC);

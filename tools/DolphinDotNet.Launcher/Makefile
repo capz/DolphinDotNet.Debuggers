@@ -11,7 +11,7 @@ TARGET := build/DolphinDotNet.Launcher
 PYTHON ?= python3
 CFLAGS := $(MACHDEP) -O2 -g -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -I$(LIBOGC_INC) -D_DEFAULT_SOURCE
 CPPFLAGS := -DDND_LAUNCHER_PORT=$(PORT) -DDND_LAUNCHER_IP='"$(IP)"' -DDND_LAUNCHER_MASK='"$(NETMASK)"' -DDND_LAUNCHER_GATEWAY='"$(GATEWAY)"'
-OBJECTS := build/gamecube.o build/elf.o build/protocol.o build/branding.o build/logo.o build/usb_transport.o build/trampoline.o
+OBJECTS := build/gamecube.o build/elf.o build/protocol.o build/zlib_decode.o build/puff.o build/branding.o build/logo.o build/usb_transport.o build/trampoline.o
 .PHONY: all clean test
 all: $(TARGET).dol
 build:
@@ -23,7 +23,7 @@ build/trampoline.o: trampoline.S | build
 build/logo.o: logo.S branding.h assets/logo.yuyv | build
 	$(CC) $(MACHDEP) -c $< -o $@
 build/receiver.elf: $(OBJECTS) Makefile
-	$(CC) $(MACHDEP) -Wl,--gc-sections,-Map,build/receiver.map $(OBJECTS) -L$(LIBOGC_LIB) -lbba -logc -lm -lz -o $@
+	$(CC) $(MACHDEP) -Wl,--gc-sections,-Map,build/receiver.map $(OBJECTS) -L$(LIBOGC_LIB) -lbba -logc -lm -o $@
 build/restore.bin: build/trampoline.o
 	$(OBJCOPY) -O binary --only-section=.text.dnd_launcher_stub $< $@
 build/resident.bin: build/receiver.elf build/restore.bin pack_resident.py resident.h
