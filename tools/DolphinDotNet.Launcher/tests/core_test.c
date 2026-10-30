@@ -79,7 +79,7 @@ static void prepare_compressed(Peer *p) {
     p->length=68+length;
 }
 static int session(Peer *peer) {
-    DndLauncherIo io={peer,rd,wr,alloc,state,512,progress};
+    DndLauncherIo io={peer,rd,wr,alloc,state,512,progress,true};
     DndElfPlan plan; uint8_t *image=NULL;
     int r=dnd_launcher_session(&io,&image,&plan);
     assert((image!=NULL)==(r==1));
@@ -115,6 +115,12 @@ int main(void) {
     assert(!dnd_elf_validate(elf,256,0x81400000,0x10000,&plan)); /* Resident code/image. */
     Peer p;
     prepare(&p,DND_EXECUTE); assert(session(&p)==1 && p.written==48);
+    prepare(&p,DND_EXECUTE);
+    memmove(p.input+5,p.input,p.length);
+    memcpy(p.input,"stale",5);
+    p.length+=5;
+    assert(session(&p)==1 && p.written==48); /* USB stream skips stale prefix. */
+
     assert(p.received==256 && p.total==256 && p.progress_calls>2 && p.progress_calls<=102);
     assert(p.output[7]==DND_READY && be32(p.output+8)==0x12345678 && be32(p.output+12)==(512u|0x80000000u));
     assert(p.output[23]==DND_ACCEPTED && p.output[39]==DND_EXECUTING);
