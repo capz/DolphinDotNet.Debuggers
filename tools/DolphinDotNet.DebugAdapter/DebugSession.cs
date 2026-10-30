@@ -32,6 +32,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     private bool _variablePaging;
     private int _nextVariable;
     private bool _telemetryReported;
+    private bool _startupDiagnostics;
     private DebugHeartbeat? _heartbeat;
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -98,6 +99,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
             if (_execution is { IsCompleted: false }) throw new InvalidOperationException("Previous target is still shutting down.");
             Interlocked.Exchange(ref _terminated, 0);
             _telemetryReported = false;
+            _startupDiagnostics = command == "launch";
             _configured = false;
             _stopOnEntry = !args.TryGetProperty("stopOnEntry", out var stopOnEntry) || stopOnEntry.GetBoolean();
             int connectSeconds = args.TryGetProperty("connectTimeoutSeconds", out var connectTimeout) ? connectTimeout.GetInt32() : 0;
@@ -516,7 +518,7 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     }
 
     private Task StartupStatusAsync(string step)
-        => connection.EventAsync("output", new { category = "console", output = "[target startup] " + step + "\n" });
+        => !_startupDiagnostics ? Task.CompletedTask : connection.EventAsync("output", new { category = "console", output = "[target startup] " + step + "\n" });
 
     private async Task OptionalStartupAsync(string name, Func<Task> operation)
     {
