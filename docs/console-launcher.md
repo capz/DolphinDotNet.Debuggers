@@ -135,7 +135,7 @@ upload does not terminate the session. Invalid packets and remote errors remain
 failures. This is separate from a disconnect while bytes are transferring.
 
 DNDL uses 16-byte `DNDL`/version-1 frames, big-endian fields, a per-session nonce,
-uncompressed ELF bytes and IEEE CRC32. See the native launcher README for the
+and IEEE CRC32 over the original ELF. New receivers set the high bit of the READY capacity field to advertise zlib support (the remaining bits retain the original capacity). The host sends command 10 (`UPLOAD_ZLIB`) only when compressed bytes plus the 4-byte big-endian compressed length are smaller than the raw ELF; command 3 (`UPLOAD`) remains unchanged for older receivers and incompressible files. The receiver stages compressed input separately from the output, enforces both size and memory limits, inflates into the original ELF location, and checks the original ELF CRC32 and layout before acknowledging execution. The receiver's 60-second session deadline still applies. Both the Rider plugin/adapter and the physical launcher DOL must be updated to benefit from compression. See the native launcher README for the
 complete wire contract. CRC32/nonce are not authentication; use a trusted LAN.
 After the execution acknowledgement the host sends a final COMMIT, proving that
 the last reply arrived before the console shuts down networking. The receiver
