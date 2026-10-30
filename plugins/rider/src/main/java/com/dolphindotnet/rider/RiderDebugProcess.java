@@ -80,8 +80,21 @@ final class RiderDebugProcess extends XDebugProcess implements DapClient.Listene
             emulatorHandler.startNotify();
         }
         submit(() -> {
-            dap.start(arguments).get(355, TimeUnit.SECONDS); ready = true; syncBreakpoints();
+            output("[Rider startup] Waiting for DAP launch and initialized event.\\n", false);
+            dap.start(arguments).get(355, TimeUnit.SECONDS);
+            output("[Rider startup] DAP initialized event received.\n", false);
+            ready = true;
+            try {
+                syncBreakpoints();
+                output("[Rider startup] Initial breakpoints synchronized.\n", false);
+            } catch (Exception error) {
+                // A bad IDE breakpoint or source mapping must not leave the target
+                // permanently waiting for configurationDone.
+                output("[Rider startup] Breakpoint sync failed; continuing initialization: " + error + "\n", true);
+            }
+            output("[Rider startup] Sending configurationDone.\n", false);
             await(dap.server.configurationDone(new ConfigurationDoneArguments()));
+            output("[Rider startup] configurationDone acknowledged; debugger ready.\n", false);
         });
     }
     private void updateBreakpoints() {
