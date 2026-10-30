@@ -23,7 +23,7 @@ build/trampoline.o: trampoline.S | build
 build/logo.o: logo.S branding.h assets/logo.yuyv | build
 	$(CC) $(MACHDEP) -c $< -o $@
 build/receiver.elf: $(OBJECTS) Makefile
-	$(CC) $(MACHDEP) -Wl,--gc-sections,-Map,build/receiver.map $(OBJECTS) -L$(LIBOGC_LIB) -lbba -logc -lm -o $@
+	$(CC) $(MACHDEP) -Wl,--gc-sections,-Map,build/receiver.map $(OBJECTS) -L$(LIBOGC_LIB) -lbba -logc -lm -lz -o $@
 build/restore.bin: build/trampoline.o
 	$(OBJCOPY) -O binary --only-section=.text.dnd_launcher_stub $< $@
 build/resident.bin: build/receiver.elf build/restore.bin pack_resident.py resident.h
