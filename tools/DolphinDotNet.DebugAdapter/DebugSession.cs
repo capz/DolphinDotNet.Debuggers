@@ -516,20 +516,21 @@ public sealed class DebugSession(DapConnection connection) : IAsyncDisposable
     }
 
     private Task StartupStatusAsync(string step)
-        => connection.EventAsync("output", new { category = "console", output = "[target startup] " + step + "\\n" });
+        => connection.EventAsync("output", new { category = "console", output = "[target startup] " + step + "\n" });
 
     private async Task OptionalStartupAsync(string name, Func<Task> operation)
     {
         try
         {
             // Optional telemetry must not prevent a usable GDB/DAP session.
-            // The RSP command itself remains bounded by the transport timeout.
-            await operation().WaitAsync(TimeSpan.FromSeconds(5), _lifetime.Token);
+            // RSP commands already have bounded timeouts. Do not abandon a command
+            // while it owns the RSP stream, or subsequent packets may desynchronize.
+            await operation();
         }
         catch (Exception error) when (error is not OperationCanceledException || !_lifetime.IsCancellationRequested)
         {
             await connection.EventAsync("output", new { category = "console",
-                output = "[target startup] Skipping optional " + name + ": " + error.Message + "\\n" });
+                output = "[target startup] Skipping optional " + name + ": " + error.Message + "\n" });
         }
     }
 
