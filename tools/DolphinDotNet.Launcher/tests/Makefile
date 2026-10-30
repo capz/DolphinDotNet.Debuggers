@@ -10,9 +10,9 @@ test: build/core_test build/stdio_receiver build/branding_test build/usb_transpo
 build:
 	mkdir -p build
 build/core_test: tests/core_test.c elf.c protocol.c elf.h protocol.h resident.h | build
-	$(HOST_CC) $(HOST_CFLAGS) -I. tests/core_test.c elf.c protocol.c -o $@
+	$(HOST_CC) $(HOST_CFLAGS) -I. tests/core_test.c elf.c protocol.c -lz -o $@
 build/stdio_receiver: tests/stdio_receiver.c elf.c protocol.c elf.h protocol.h resident.h | build
-	$(HOST_CC) $(PEER_CFLAGS) -I. tests/stdio_receiver.c elf.c protocol.c -o $@
+	$(HOST_CC) $(PEER_CFLAGS) -I. tests/stdio_receiver.c elf.c protocol.c -lz -o $@
 build/branding_test: tests/branding_test.c branding.c branding.h | build
 	$(HOST_CC) $(HOST_CFLAGS) -I. tests/branding_test.c branding.c -o $@
 build/usb_transport_test: tests/usb_transport_test.c usb_transport.c usb_transport.h tests/stubs/ogc/usbgecko.h | build

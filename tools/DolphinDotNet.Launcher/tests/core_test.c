@@ -2,6 +2,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <zlib.h>
 
 static void put16(uint8_t *p, unsigned n) { p[0]=(uint8_t)(n>>8); p[1]=(uint8_t)n; }
 static void put32(uint8_t *p, uint32_t n) { p[0]=(uint8_t)(n>>24); p[1]=(uint8_t)(n>>16); p[2]=(uint8_t)(n>>8); p[3]=(uint8_t)n; }
@@ -47,7 +48,7 @@ static void state(void *context, unsigned n) {
 }
 static void progress(void *context, uint32_t received, uint32_t total) {
     Peer *p=context;
-    assert(total==256 && received<=total);
+    assert(total>0 && total<=256 && received<=total);
     assert(!p->progress_calls ? received==0 : received>p->received && p->total==total);
     p->progress_calls++; p->received=received; p->total=total;
 }
@@ -60,6 +61,22 @@ static void prepare(Peer *p, unsigned last) {
     frame(p->input,DND_HELLO,0x12345678,0);
     frame(p->input+16,DND_UPLOAD,256,dnd_launcher_crc32(p->input+32,256));
     frame(p->input+288,last,0x12345678,0); frame(p->input+304,DND_COMMIT,0x12345678,0); p->length=320;
+}
+static void prepare_compressed(Peer *p) {
+    prepare(p,DND_EXECUTE);
+    uint8_t source[256];
+    memcpy(source,p->input+32,sizeof(source));
+    uLongf length=compressBound(sizeof(source));
+    uint8_t compressed[512];
+    assert(length<=sizeof(compressed));
+    assert(compress2(compressed,&length,source,sizeof(source),Z_BEST_COMPRESSION)==Z_OK);
+    assert(length<sizeof(source));
+    frame(p->input+16,DND_UPLOAD_ZLIB,256,dnd_launcher_crc32(source,256));
+    put32(p->input+32,(uint32_t)length);
+    memcpy(p->input+36,compressed,length);
+    frame(p->input+36+length,DND_EXECUTE,0x12345678,0);
+    frame(p->input+52+length,DND_COMMIT,0x12345678,0);
+    p->length=68+length;
 }
 static int session(Peer *peer) {
     DndLauncherIo io={peer,rd,wr,alloc,state,512,progress};
@@ -99,9 +116,15 @@ int main(void) {
     Peer p;
     prepare(&p,DND_EXECUTE); assert(session(&p)==1 && p.written==48);
     assert(p.received==256 && p.total==256 && p.progress_calls>2 && p.progress_calls<=102);
-    assert(p.output[7]==DND_READY && be32(p.output+8)==0x12345678 && be32(p.output+12)==512);
+    assert(p.output[7]==DND_READY && be32(p.output+8)==0x12345678 && be32(p.output+12)==(512u|0x80000000u));
     assert(p.output[23]==DND_ACCEPTED && p.output[39]==DND_EXECUTING);
     assert(p.states==((1u<<DND_READY)|(1u<<DND_UPLOAD)|(1u<<DND_ACCEPTED)|(1u<<DND_EXECUTING)));
+    prepare_compressed(&p); assert(session(&p)==1);
+    assert(p.received<256 && p.received>0 && p.total==p.received);
+    prepare_compressed(&p); p.input[36]^=0xff;
+    assert(session(&p)==-1 && p.rejection==DND_BAD_COMPRESSION);
+    prepare_compressed(&p); put32(p.input+32,0);
+    assert(session(&p)==-1 && p.rejection==DND_BAD_COMPRESSION);
     prepare(&p,DND_CANCEL); assert(session(&p)==0);
     prepare(&p,DND_EXECUTE); frame(p.input+16,DND_CANCEL,0x12345678,0); p.length=32;
     assert(session(&p)==0 && !p.allocations && p.written==16);

@@ -1,5 +1,6 @@
 #include "protocol.h"
 #include <string.h>
+#include <zlib.h>
 
 static uint32_t be32(const uint8_t *p) { return (uint32_t)p[0]<<24 | (uint32_t)p[1]<<16 | (uint32_t)p[2]<<8 | p[3]; }
 static void put32(uint8_t *p, uint32_t v) { p[0]=(uint8_t)(v>>24); p[1]=(uint8_t)(v>>16); p[2]=(uint8_t)(v>>8); p[3]=(uint8_t)v; }
@@ -49,18 +50,33 @@ int dnd_launcher_session(DndLauncherIo *io, uint8_t **image, DndElfPlan *plan) {
     uint32_t nonce=be32(h+8);
     size_t maximum=io->maximum_image;
     if (maximum>DND_LAUNCHER_MAX_IMAGE) maximum=DND_LAUNCHER_MAX_IMAGE;
-    if (!send(io,DND_READY,nonce,(uint32_t)maximum)) return -1;
+    if (!send(io,DND_READY,nonce,(uint32_t)maximum | 0x80000000u)) return -1;
     if (io->status) io->status(io->context,DND_READY);
     if (!header(io,h)) return -1;
     if (h[7]==DND_CANCEL && be32(h+8)==nonce && !be32(h+12)) return 0;
-    if (h[7]!=DND_UPLOAD) return reject(io,DND_BAD_REQUEST);
-    uint32_t length=be32(h+8), crc=be32(h+12);
+    bool compressed=h[7]==DND_UPLOAD_ZLIB;
+    if (!compressed && h[7]!=DND_UPLOAD) return reject(io,DND_BAD_REQUEST);
+    uint32_t length=be32(h+8), crc=be32(h+12), wire_length=length;
     if (length<52 || length>maximum) return reject(io,DND_TOO_LARGE);
+    if (compressed) {
+        uint8_t size_bytes[4];
+        if (!exact(io,size_bytes,sizeof(size_bytes),false)) return -1;
+        wire_length=be32(size_bytes);
+        if (!wire_length || wire_length>=length || wire_length>maximum) return reject(io,DND_BAD_COMPRESSION);
+    }
     uintptr_t stage=0; size_t stage_size=0;
-    uint8_t *buffer=io->allocate(io->context,length,&stage,&stage_size);
+    /* The compressed input follows the output ELF, keeping the output in the
+     * fixed staging buffer used by the existing validation/chainload path. */
+    size_t allocation=(size_t)length+(compressed ? wire_length : 0u);
+    uint8_t *buffer=io->allocate(io->context,allocation,&stage,&stage_size);
     if (!buffer) return reject(io,DND_NO_MEMORY);
     if (io->status) io->status(io->context,DND_UPLOAD);
-    if (!receive_image(io,buffer,length)) return -1;
+    if (!receive_image(io,compressed ? buffer+length : buffer,wire_length)) return -1;
+    if (compressed) {
+        uLongf decoded=length;
+        if (uncompress(buffer,&decoded,buffer+length,wire_length)!=Z_OK || decoded!=length)
+            return reject(io,DND_BAD_COMPRESSION);
+    }
     if (dnd_launcher_crc32(buffer,length)!=crc) return reject(io,DND_BAD_CRC);
     if (!dnd_elf_validate(buffer,length,stage,stage_size,plan)) return reject(io,DND_BAD_ELF);
     if (!send(io,DND_ACCEPTED,length,crc)) return -1;

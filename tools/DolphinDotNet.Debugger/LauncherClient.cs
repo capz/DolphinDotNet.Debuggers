@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Ports;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.IO.Compression;
 
 namespace DolphinDotNet.Debugger;
 
@@ -25,7 +26,8 @@ public sealed record LauncherEndpoint(string Transport, string? Host, int Port, 
 public static class LauncherProtocol
 {
     public const uint MaximumImageBytes = 16 * 1024 * 1024 - 4096;
-    public const ushort Hello = 1, Ready = 2, Upload = 3, Accepted = 4, Execute = 5, Executing = 6, Error = 7, Cancel = 8, Commit = 9;
+    public const ushort Hello = 1, Ready = 2, Upload = 3, Accepted = 4, Execute = 5, Executing = 6, Error = 7, Cancel = 8, Commit = 9, UploadZlib = 10;
+    public const uint CompressionFlag = 0x80000000;
 
     public static uint Crc32(ReadOnlySpan<byte> data)
     {
@@ -60,45 +62,64 @@ public static class LauncherProtocol
         if (kind == Error)
             throw new InvalidDataException("The console launcher rejected the request: " + (value switch {
                 1 => "invalid request/state", 2 => "ELF exceeds the receiver's limit", 3 => "CRC32 mismatch",
-                4 => "unsupported/malformed ELF or staging-memory overlap", 5 => "staging memory unavailable", _ => $"error {value}" }));
+                4 => "unsupported/malformed ELF or staging-memory overlap", 5 => "staging memory unavailable", 6 => "invalid compressed image", _ => $"error {value}" }));
         if (kind != expected) throw new InvalidDataException($"Unexpected launcher reply {kind}; expected {expected}.");
         return (value, detail);
     }
-    public static async Task<uint> HandshakeAsync(Stream stream, uint nonce, CancellationToken token = default)
+    public static async Task<(uint MaximumImageBytes, bool SupportsCompression)> HandshakeCapabilitiesAsync(Stream stream, uint nonce, CancellationToken token = default)
     {
         await SendAsync(stream, Hello, nonce, 0, token).ConfigureAwait(false);
         var reply = await ReceiveAsync(stream, Ready, token).ConfigureAwait(false);
-        if (reply.Value != nonce || reply.Detail is < 52 or > MaximumImageBytes)
+        var limit = reply.Detail & ~CompressionFlag;
+        if (reply.Value != nonce || limit is < 52 or > MaximumImageBytes)
             throw new InvalidDataException("Invalid/stale launcher readiness reply.");
-        return reply.Detail;
+        return (limit, (reply.Detail & CompressionFlag) != 0);
     }
+    public static async Task<uint> HandshakeAsync(Stream stream, uint nonce, CancellationToken token = default)
+        => (await HandshakeCapabilitiesAsync(stream, nonce, token).ConfigureAwait(false)).MaximumImageBytes;
     public static Task CancelAsync(Stream stream, uint nonce, CancellationToken token = default)
         => SendAsync(stream, Cancel, nonce, 0, token);
 
     public static async Task UploadAndExecuteAsync(Stream stream, uint nonce, uint maximumImageBytes,
         ReadOnlyMemory<byte> image, Action<string>? status = null, CancellationToken token = default,
-        Func<int, int, Task>? progress = null)
+        Func<int, int, Task>? progress = null, bool supportsCompression = false)
     {
         if (image.Length < 52 || image.Length > maximumImageBytes || image.Length > MaximumImageBytes)
             throw new ArgumentException("ELF does not fit the ready receiver's advertised image limit.", nameof(image));
         var crc = Crc32(image.Span);
-        await SendAsync(stream, Upload, (uint)image.Length, crc, token).ConfigureAwait(false);
-        if (progress is not null) await progress(0, image.Length).ConfigureAwait(false);
-        var lastStep = 0;
-        for (var offset = 0; offset < image.Length; offset += 3968)
+        ReadOnlyMemory<byte> payload = image;
+        if (supportsCompression)
         {
-            var count = Math.Min(3968, image.Length - offset);
-            await stream.WriteAsync(image.Slice(offset, count), token).AsTask().WaitAsync(token).ConfigureAwait(false);
+            using var compressed = new MemoryStream();
+            using (var zlib = new ZLibStream(compressed, CompressionLevel.Optimal, leaveOpen: true))
+                zlib.Write(image.Span);
+            if (compressed.Length + 4 < image.Length)
+                payload = compressed.ToArray();
+        }
+        var useCompression = payload.Length != image.Length;
+        await SendAsync(stream, useCompression ? UploadZlib : Upload, (uint)image.Length, crc, token).ConfigureAwait(false);
+        if (useCompression)
+        {
+            var size = new byte[4];
+            BinaryPrimitives.WriteUInt32BigEndian(size, checked((uint)payload.Length));
+            await stream.WriteAsync(size, token).AsTask().WaitAsync(token).ConfigureAwait(false);
+        }
+        if (progress is not null) await progress(0, payload.Length).ConfigureAwait(false);
+        var lastStep = 0;
+        for (var offset = 0; offset < payload.Length; offset += 3968)
+        {
+            var count = Math.Min(3968, payload.Length - offset);
+            await stream.WriteAsync(payload.Slice(offset, count), token).AsTask().WaitAsync(token).ConfigureAwait(false);
             var sent = offset + count;
-            var step = (int)((long)sent * 20 / image.Length);
-            if (progress is not null && sent < image.Length && step > lastStep)
+            var step = (int)((long)sent * 20 / payload.Length);
+            if (progress is not null && sent < payload.Length && step > lastStep)
             {
-                await progress(sent, image.Length).ConfigureAwait(false);
+                await progress(sent, payload.Length).ConfigureAwait(false);
                 lastStep = step;
             }
         }
         await stream.FlushAsync(token).WaitAsync(token).ConfigureAwait(false);
-        if (progress is not null) await progress(image.Length, image.Length).ConfigureAwait(false);
+        if (progress is not null) await progress(payload.Length, payload.Length).ConfigureAwait(false);
         var accepted = await ReceiveAsync(stream, Accepted, token).ConfigureAwait(false);
         if (accepted.Value != image.Length || accepted.Detail != crc)
             throw new InvalidDataException("The receiver acknowledged a different ELF. Execution was not requested.");
@@ -120,6 +141,7 @@ public sealed class LauncherClient : IAsyncDisposable
     private readonly uint _nonce;
     private bool _committed, _disposed;
     public uint MaximumImageBytes { get; private set; }
+    public bool SupportsCompression { get; private set; }
 
     private LauncherClient(Stream stream, IDisposable owner)
     {
@@ -160,7 +182,7 @@ public sealed class LauncherClient : IAsyncDisposable
                         catch { port.Dispose(); throw; }
                         client = new LauncherClient(port.BaseStream, port);
                     }
-                    client.MaximumImageBytes = await LauncherProtocol.HandshakeAsync(client._stream, client._nonce, attempt.Token).ConfigureAwait(false);
+                    (client.MaximumImageBytes, client.SupportsCompression) = await LauncherProtocol.HandshakeCapabilitiesAsync(client._stream, client._nonce, attempt.Token).ConfigureAwait(false);
                     return client;
                 }
                 catch (InvalidDataException) { if (client is not null) client.Close(); throw; }
@@ -192,7 +214,7 @@ public sealed class LauncherClient : IAsyncDisposable
         {
             if (_owner is SerialPort serial)
                 serial.ReadTimeout = serial.WriteTimeout = (int)Math.Ceiling(timeout.TotalMilliseconds);
-            await LauncherProtocol.UploadAndExecuteAsync(_stream, _nonce, MaximumImageBytes, image, status, deadline.Token, progress).ConfigureAwait(false);
+            await LauncherProtocol.UploadAndExecuteAsync(_stream, _nonce, MaximumImageBytes, image, status, deadline.Token, progress, SupportsCompression).ConfigureAwait(false);
             // The final COMMIT has no reply. Keep the upload port alive until the
             // driver's output queue drains before reopening the same device for GDB.
             if (_owner is SerialPort uploadPort)

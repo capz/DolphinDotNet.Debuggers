@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
 using DolphinDotNet.Debugger;
@@ -35,6 +36,23 @@ static class LauncherTests
             Check(sent.AsSpan(32 + image.Length, 16).SequenceEqual(Reply(LauncherProtocol.Execute, Nonce, 0)), "execute after validated acknowledgement");
             Check(sent.AsSpan(48 + image.Length).SequenceEqual(Reply(LauncherProtocol.Commit, Nonce, 0)), "commit after execution ACK reaches host");
             Check(stream.LargestWrite <= 3968, "serial FIFO chunks");
+        }
+        using (var stream = new Duplex(Reply(LauncherProtocol.Ready, Nonce, 16000 | LauncherProtocol.CompressionFlag),
+            Reply(LauncherProtocol.Accepted, (uint)image.Length, crc), Reply(LauncherProtocol.Executing, Nonce, 0)))
+        {
+            var (limit, supportsCompression) = await LauncherProtocol.HandshakeCapabilitiesAsync(stream, Nonce);
+            Check(limit == 16000 && supportsCompression, "compressed receiver capability");
+            await LauncherProtocol.UploadAndExecuteAsync(stream, Nonce, limit, image, supportsCompression: supportsCompression);
+            var wire = stream.Output.ToArray();
+            Check(wire.AsSpan(16,16).SequenceEqual(Reply(LauncherProtocol.UploadZlib,(uint)image.Length,crc)), "compressed upload command");
+            var size = (int)BinaryPrimitives.ReadUInt32BigEndian(wire.AsSpan(32,4));
+            Check(size < image.Length, "compressed transfer is smaller");
+            using var encoded = new MemoryStream(wire,36,size);
+            using var decoder = new ZLibStream(encoded,CompressionMode.Decompress);
+            using var decoded = new MemoryStream();
+            decoder.CopyTo(decoded);
+            Check(decoded.ToArray().SequenceEqual(image), "compressed payload round-trips exactly");
+            Check(wire.AsSpan(36+size,16).SequenceEqual(Reply(LauncherProtocol.Execute,Nonce,0)), "compressed execution gate");
         }
         foreach (var ready in new[] { Reply(LauncherProtocol.Ready, Nonce + 1, 1000), Reply(LauncherProtocol.Ready, Nonce, 1), Reply(LauncherProtocol.Accepted, Nonce, 1000), Reply(LauncherProtocol.Ready, Nonce, uint.MaxValue) })
         {
