@@ -78,6 +78,7 @@ static void status(void *p, unsigned state) {
     else if (state==DND_STATUS_REJECTED+DND_TOO_LARGE) printf("\nRejected: executable exceeds upload limits.\n");
     else if (state==DND_STATUS_REJECTED+DND_BAD_CRC) printf("\nRejected: binary checksum mismatch.\n");
     else if (state==DND_STATUS_REJECTED+DND_BAD_ELF) printf("\nRejected: unsupported executable or staging-memory overlap.\n");
+    else if (state==DND_STATUS_REJECTED+DND_BAD_COMPRESSION) printf("\nRejected: invalid compressed ELF payload.\n");
     else if (state==DND_STATUS_REJECTED+DND_NO_MEMORY) printf("\nRejected: upload staging memory unavailable.\n");
     fflush(stdout);
 }
