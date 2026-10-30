@@ -15,6 +15,8 @@ typedef struct {
     size_t maximum_image;
     /* Monotonic bytes actually received; starts at zero, completes only on full input. */
     void (*progress)(void *, uint32_t received, uint32_t total);
+    /* On USB only, scan stale bytes for a complete HELLO before replying. */
+    bool resynchronize_hello;
 } DndLauncherIo;
 
 /* 1: validated, EXECUTING acknowledged and host COMMIT received; chainload.

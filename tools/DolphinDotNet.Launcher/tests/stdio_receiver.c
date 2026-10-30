@@ -10,7 +10,7 @@ static uint8_t *alloc(void *p, size_t n, uintptr_t *start, size_t *extent) {
 }
 int main(void) {
     uint8_t *allocation=NULL, *image=NULL; DndElfPlan plan;
-    DndLauncherIo io={&allocation,rd,wr,alloc,NULL,DND_LAUNCHER_MAX_IMAGE,NULL};
+    DndLauncherIo io={&allocation,rd,wr,alloc,NULL,DND_LAUNCHER_MAX_IMAGE,NULL,false};
     int result=dnd_launcher_session(&io,&image,&plan);
     if (result==1) fprintf(stderr,"VALIDATED entry=%08x segments=%u\n",plan.entry,plan.count);
     free(allocation);
