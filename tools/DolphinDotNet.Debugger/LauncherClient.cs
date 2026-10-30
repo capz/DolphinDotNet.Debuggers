@@ -185,7 +185,15 @@ public sealed class LauncherClient : IAsyncDisposable
                     (client.MaximumImageBytes, client.SupportsCompression) = await LauncherProtocol.HandshakeCapabilitiesAsync(client._stream, client._nonce, attempt.Token).ConfigureAwait(false);
                     return client;
                 }
-                catch (InvalidDataException) { if (client is not null) client.Close(); throw; }
+                catch (InvalidDataException error)
+                {
+                    client?.Close();
+                    // A stale USB Gecko packet from the previous GDB session can
+                    // provoke a DNDL rejection before the new readiness handshake.
+                    // Only readiness is retried; upload/execution is never retried.
+                    if (endpoint.Transport != "usbGecko") throw;
+                    last = error;
+                }
                 catch (Exception error) when (error is IOException or SocketException or OperationCanceledException or UnauthorizedAccessException)
                 {
                     last = error;
