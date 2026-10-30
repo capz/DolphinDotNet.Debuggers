@@ -54,7 +54,7 @@ static bool initial_hello(DndLauncherIo *io, uint8_t h[16]) {
         if (!exact(io,&byte,1,false)) return false;
         if (used<16) h[used++]=byte;
         else { memmove(h,h+1,15); h[15]=byte; }
-        if (used==16 && !memcmp(h,"DNDL\\0\\1\\0",7) &&
+        if (used==16 && !memcmp(h,"DNDL\0\1\0",7) &&
             h[7]==DND_HELLO && be32(h+12)==0) return true;
     }
     return false;
