@@ -43,10 +43,26 @@ static bool receive_image(DndLauncherIo *io, uint8_t *buffer, uint32_t length) {
     }
     return true;
 }
+static bool initial_hello(DndLauncherIo *io, uint8_t h[16]) {
+    if (!io->resynchronize_hello) return header(io,h);
+    /* Only resynchronize before READY; never scan an upload payload.
+       A bounded scan prevents accepting unlimited garbage as handshake input.
+       The transport's original 60-second deadline remains authoritative. */
+    size_t used=0;
+    for (size_t scanned=0; scanned<4096; scanned++) {
+        uint8_t byte;
+        if (!exact(io,&byte,1,false)) return false;
+        if (used<16) h[used++]=byte;
+        else { memmove(h,h+1,15); h[15]=byte; }
+        if (used==16 && !memcmp(h,"DNDL\\0\\1\\0",7) &&
+            h[7]==DND_HELLO && be32(h+12)==0) return true;
+    }
+    return false;
+}
 int dnd_launcher_session(DndLauncherIo *io, uint8_t **image, DndElfPlan *plan) {
     uint8_t h[16];
     *image=NULL;
-    if (!header(io,h) || h[7]!=DND_HELLO || be32(h+12)) return reject(io,DND_BAD_REQUEST);
+    if (!initial_hello(io,h) || h[7]!=DND_HELLO || be32(h+12)) return reject(io,DND_BAD_REQUEST);
     uint32_t nonce=be32(h+8);
     size_t maximum=io->maximum_image;
     if (maximum>DND_LAUNCHER_MAX_IMAGE) maximum=DND_LAUNCHER_MAX_IMAGE;
