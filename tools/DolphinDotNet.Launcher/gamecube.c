@@ -95,7 +95,7 @@ static void upload_progress(void *p, uint32_t received, uint32_t total) {
 }
 static void serve(Connection c) {
     c.deadline=gettime()+secs_to_ticks(60);
-    DndLauncherIo io={&c,receive,transmit,allocate_image,status,DND_LAUNCHER_MAX_IMAGE,upload_progress};
+    DndLauncherIo io={&c,receive,transmit,allocate_image,status,DND_LAUNCHER_MAX_IMAGE,upload_progress,c.socket<0};
     DndElfPlan plan;
     uint8_t *image=NULL;
     int result=dnd_launcher_session(&io,&image,&plan);
